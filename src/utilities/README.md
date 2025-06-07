@@ -19,6 +19,9 @@ Génération des flux optiques avec masquage intelligent.
 ### `load_flows.py`
 Chargement des flux optiques (formats .npy et .npz compressé).
 
+### `load_video_frame.py`
+Chargement fiable des frames vidéo, particulièrement adapté pour les vidéos HEVC.
+
 ### `extract_means.py`
 Conversion des prédictions d'angles en pixels et calcul des moyennes.
 

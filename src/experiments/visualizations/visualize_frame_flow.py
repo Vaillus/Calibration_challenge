@@ -5,6 +5,7 @@ import os
 
 from src.utilities.ground_truth import get_frame_pixel
 from src.utilities.paths import get_labeled_dir, get_flows_dir
+from src.utilities.load_video_frame import read_frame_rgb
 
 def visualize_flow(flow, frame_idx, video_idx=0, stride=20):
     """
@@ -18,17 +19,14 @@ def visualize_flow(flow, frame_idx, video_idx=0, stride=20):
     """
     # Load the original frame for background
     video_path = get_labeled_dir() / f'{video_idx}.hevc'
-    cap = cv2.VideoCapture(str(video_path))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-    ret, frame = cap.read()
-    cap.release()
-
-    gt_pixels = get_frame_pixel(video_idx, frame_idx)
-    center_pixel = (frame.shape[1] // 2, frame.shape[0] // 2)
+    ret, frame_rgb = read_frame_rgb(video_path, frame_idx)
 
     if not ret:
         print(f"Impossible de lire la frame {frame_idx}")
         return
+
+    gt_pixels = get_frame_pixel(video_idx, frame_idx)
+    center_pixel = (frame_rgb.shape[1] // 2, frame_rgb.shape[0] // 2)
     
     # Get flow field for the specified frame
     flow_field = flow[frame_idx]
@@ -45,12 +43,9 @@ def visualize_flow(flow, frame_idx, video_idx=0, stride=20):
     magnitude = np.sqrt(fx**2 + fy**2)
     mask = magnitude > 13  # Threshold for minimum flow magnitude
     
-    plot_stuff(frame, gt_pixels, center_pixel, x, y, fx, fy, mask, video_idx, frame_idx)
+    plot_stuff(frame_rgb, gt_pixels, center_pixel, x, y, fx, fy, mask, video_idx, frame_idx)
 
-def plot_stuff(frame, gt_pixels, center_pixel, x, y, fx, fy, mask, video_idx, frame_idx):
-    # Convert frame to RGB for matplotlib
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    
+def plot_stuff(frame_rgb, gt_pixels, center_pixel, x, y, fx, fy, mask, video_idx, frame_idx):
     # Create figure
     plt.figure(figsize=(15, 10))
     

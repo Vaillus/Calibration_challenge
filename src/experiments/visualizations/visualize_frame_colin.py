@@ -29,10 +29,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Tuple, Union, Optional
 import numpy.typing as npt
-import cv2
 
 from src.utilities.ground_truth import get_frame_pixel
 from src.utilities.paths import get_labeled_dir, get_flows_dir
+from src.utilities.load_video_frame import read_frame_rgb
 
 
 def compute_colinearity_for_points(
@@ -140,10 +140,7 @@ def plot_colinearity_on_frame(
     """
     # Load the original frame for background
     video_path = get_labeled_dir() / f'{video_idx}.hevc'
-    cap = cv2.VideoCapture(str(video_path))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-    ret, frame = cap.read()
-    cap.release()
+    ret, frame_rgb = read_frame_rgb(video_path, frame_idx)
 
     if not ret:
         print(f"Could not read frame {frame_idx}")
@@ -151,7 +148,7 @@ def plot_colinearity_on_frame(
 
     # Get ground truth and center points
     gt_pixels = get_frame_pixel(video_idx, frame_idx)
-    center_pixel = (frame.shape[1] // 2, frame.shape[0] // 2)
+    center_pixel = (frame_rgb.shape[1] // 2, frame_rgb.shape[0] // 2)
     
     # Create grid for points
     h, w = flow.shape[:2]
@@ -178,7 +175,6 @@ def plot_colinearity_on_frame(
     plt.figure(figsize=figsize)
     
     # Plot original frame with full opacity
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     plt.imshow(frame_rgb, alpha=1.0)
     
     # Plot colinearity scores with smaller, more transparent points
@@ -258,7 +254,7 @@ def print_colinearity_stats(colinearity: npt.NDArray[np.float64], prefix: str = 
 if __name__ == "__main__":
     # Example usage with a video frame:
     video_idx = 4
-    frame_idx = 848
+    frame_idx = 248
     
     # Load flows
     flow_file = get_flows_dir() / f'{video_idx}.npy'

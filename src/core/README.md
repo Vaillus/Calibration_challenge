@@ -1,33 +1,36 @@
-# 🏗️ Core - Modules Fondamentaux
+# Core - Fundamental Modules
 
-Ce dossier contient les briques fondamentales du système d'estimation de points de fuite.
+This directory contains the fundamental building blocks of the vanishing point estimation system.
 
-## 📁 Modules (dans l'ordre d'exécution)
+## Modules (in execution order)
 
-### 🚀 **`interactive_viewer.py`** 
-Visualiseur interactif temps réel pour débugger et analyser le système. Lance une interface OpenCV qui permet de :
-- Naviguer frame par frame dans les vidéos
-- Comparer prédictions vs ground truth vs estimations
-- Tester différentes visualisations de flux optique
-- Faire de la segmentation manuelle
+### **`interactive_viewer.py`** 
+Real-time interactive viewer for debugging and analyzing the system. Launches an OpenCV interface that allows:
+- Frame-by-frame navigation through videos
+- Comparison of predictions vs ground truth vs estimates
+- Testing different optical flow visualizations
+- Manual segmentation
 
-### 🎥 **`flow.py`** 
-Génération et manipulation des flux optiques (calcul dense Farnebäck, points de séparation)
+### **`flow.py`** 
+Generation and manipulation of optical flows (dense Farnebäck calculation, separation points)
 
-### 🎭 **`segmentation.py`** 
-Détection et masquage d'objets (véhicules, capot) avec YOLO pour filtrer les flux parasites
+### **`segmentation.py`** 
+Object detection and masking (vehicles, hood) with YOLO to filter parasitic flows
 
-### 🔧 **`flow_filter.py`** 
-Filtrage et pondération des flux optiques (par norme, colinéarité, distance au centre)
+### **`flow_filter.py`** 
+Filtering and weighting of optical flows (by norm, collinearity, distance to center)
 
-### 🔍 **`colinearity_optimization.py`** 
-Estimateur de points de fuite (version numpy/scipy classique) avec calcul de scores de colinéarité
+### **`predictions_from_flows.py`**
+Prediction generator from pre-computed optical flows.
 
-### 🔍 **`colinearity_optimization_parallel.py`** 
-Estimateur de points de fuite (version MLX parallèle) pour traitement batch haute performance
+### **`colinearity_optimization.py`** 
+Vanishing point estimator (classic numpy/scipy version) with collinearity score calculation
 
-### 🎯 **`optimizers.py`** 
-Méthodes d'optimisation centralisées (Adam MLX + L-BFGS-B scipy) pour trouver les points de fuite optimaux
+### **`colinearity_optimization_parallel.py`** 
+Vanishing point estimator (parallel MLX version) for high-performance batch processing
 
-### 🎨 **`rendering.py`** 
-Fonctions de rendu pour le visualiseur interactive_viewer.py (flèches de flux, points de séparation, masques) 
+### **`optimizers.py`** 
+Centralized optimization methods (MLX Adam + scipy L-BFGS-B) to find optimal vanishing points
+
+### **`rendering.py`** 
+Rendering functions for the interactive_viewer.py (flow arrows, separation points, masks)

@@ -18,6 +18,10 @@ __pycache__/
 *.pyd
 .Python
 
+# Python package files
+*.egg-info/
+*.egg
+
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 

@@ -5,6 +5,8 @@ data/outputs/
 
 # Models
 models/
+*.pt
+yolov8*.pt
 
 # Prompts
 prompts/

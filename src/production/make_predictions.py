@@ -300,7 +300,7 @@ class VideoProcessor:
             raise ValueError(f"Méthode de prédiction inconnue: {self.config.prediction_method}")
         
         # Convert to angles (basic conversion, no post-processing smoothing)
-        yaw, pitch = self.vp_estimator.get_angles((x, y))
+        yaw, pitch = pixels_to_angles(x, y)
         
         # Store results (LIMITATION: no temporal consistency checks)
         self.results.append({

@@ -15,9 +15,211 @@ import mlx.core as mx
 from scipy.optimize import minimize
 import gc
 from typing import Tuple, Optional, Union, List, Dict, Any
+import matplotlib.pyplot as plt
 
 
-class AdamOptimizer:
+class BaseOptimizer:
+    """
+    Base class for all optimizers with common visualization functionality.
+    
+    This class provides:
+    - Common visualization interface
+    - State tracking for optimization trajectory
+    - Abstract optimization methods to be implemented by subclasses
+    """
+    
+    def __init__(self):
+        """Initialize the base optimizer with empty visualization state."""
+        self.trajectory = []
+        self.scores = []
+    
+    def visualize_optimization(self, estimator, flow: np.ndarray, final_point: Tuple[float, float], 
+                             ground_truth_point: Optional[Tuple[float, float]] = None):
+        """
+        Visualize the optimization results.
+        
+        Args:
+            estimator: Instance of VanishingPointEstimator for computing colinearity maps
+            flow: Optical flow vector field
+            final_point: Final optimized point (x, y)
+            ground_truth_point: Optional ground truth point for visualization
+        """
+        h, w = flow.shape[:2]
+        
+        plt.figure(figsize=(15, 10))
+        
+        # Plot score evolution
+        plt.subplot(2, 2, 1)
+        plt.plot([-s for s in self.scores])
+        plt.title('Score Evolution')
+        plt.xlabel('Iterations')
+        plt.ylabel('Score (higher = better)')
+        plt.grid(True)
+        
+        # Visualize optical flow field
+        plt.subplot(2, 2, 2)
+        
+        # Create a grid for flow visualization
+        Y, X = np.mgrid[0:h:20, 0:w:20]
+        U = flow[::20, ::20, 0]
+        V = flow[::20, ::20, 1]
+        
+        plt.imshow(np.zeros((h, w, 3)), cmap='gray')
+        plt.quiver(X, Y, U, -V, color='w', scale=50)
+        if ground_truth_point:
+            plt.scatter(ground_truth_point[0], ground_truth_point[1], c='green', s=100, marker='o', label='Ground truth')
+        plt.title('Optical Flow')
+        
+        # Visualize colinearity map for final point
+        plt.subplot(2, 2, 3)
+        colinearity_map = estimator.compute_colinearity_map(flow, final_point)
+        plt.imshow(colinearity_map, cmap='hot')
+        plt.colorbar(label='Colinearity')
+        if ground_truth_point:
+            plt.scatter(ground_truth_point[0], ground_truth_point[1], c='green', s=100, marker='o', label='Ground truth')
+        plt.title('Colinearity Map for Final Point')
+        
+        # Visualize descent trajectory
+        plt.subplot(2, 2, 4)
+        plt.imshow(np.zeros((h, w, 3)))
+        
+        # Convert list of tuples to numpy array for easier plotting
+        trajectory_array = np.array(self.trajectory)
+        plt.plot(trajectory_array[:, 0], trajectory_array[:, 1], 'r.-', linewidth=2)
+        plt.scatter(final_point[0], final_point[1], c='g', s=100, marker='*')
+        if ground_truth_point:
+            plt.scatter(ground_truth_point[0], ground_truth_point[1], c='green', s=100, marker='o', label='Ground truth')
+        
+        # Add annotations for first points
+        for i, (x, y) in enumerate(self.trajectory[:min(5, len(self.trajectory))]):
+            plt.annotate(f"{i}", (x, y), fontsize=12, color='white')
+        
+        plt.title('Gradient Descent Trajectory')
+        plt.xlim(0, w)
+        plt.ylim(h, 0)  # Invert y-axis to match image coordinates
+        
+        plt.tight_layout()
+        plt.show()
+
+
+class LBFGSOptimizer(BaseOptimizer):
+    """
+    Interface vers l'optimiseur L-BFGS-B de scipy pour l'estimation de points de fuite.
+    
+    Caractéristiques :
+    - Précision maximale (meilleur convergence que Adam dans la plupart des cas)
+    - Support des poids pour les vecteurs de flux
+    - Callback pour visualisation/debug
+    - Compatible avec les estimateurs numpy/scipy
+    """
+    
+    def __init__(self, 
+                 max_iter: int = 100,
+                 display_warnings: bool = False):
+        """
+        Args:
+            max_iter: Maximum iterations for L-BFGS-B
+            display_warnings: Whether to display scipy optimization warnings
+        """
+        super().__init__()
+        self.max_iter = max_iter
+        self.display_warnings = display_warnings
+    
+    def optimize_single(
+            self, 
+            estimator, 
+            flow: np.ndarray, 
+            starting_point: Optional[np.ndarray] = None,
+            weights: Optional[np.ndarray] = None,
+            visualize: bool = False,
+            ground_truth_point: Optional[Tuple[float, float]] = None
+        ) -> Tuple[float, float]:
+        """
+        Optimise un seul échantillon avec L-BFGS-B.
+        
+        Args:
+            estimator: Instance de VanishingPointEstimator (version numpy)
+            flow: Flux optique (h, w, 2)
+            starting_point: Point de départ [x, y]
+            weights: Poids optionnels (h, w)
+            visualize: Whether to visualize the optimization process
+            ground_truth_point: Optional ground truth point for visualization
+            
+        Returns:
+            Point de fuite optimisé (x, y)
+        """
+        if starting_point is None:
+            starting_point = np.array([flow.shape[1] // 2, flow.shape[0] // 2])
+        
+        # Check for valid pixels
+        valid_pixels = (flow[:,:,0]**2 + flow[:,:,1]**2) > 0
+        if np.sum(valid_pixels) == 0:
+            return tuple(starting_point)
+        
+        # Reset visualization data
+        self.trajectory = [starting_point]
+        self.scores = [estimator.objective_function(starting_point, flow, weights)]
+        
+        # Create callback if visualization is enabled
+        callback_fn = None
+        if visualize:
+            def callback(point):
+                self.trajectory.append(point.copy())
+                self.scores.append(estimator.objective_function(point, flow, weights))
+            callback_fn = callback
+        
+        # Optimization with L-BFGS-B
+        result = minimize(
+            lambda point: estimator.objective_function(point, flow, weights),
+            starting_point,
+            method='L-BFGS-B',
+            callback=callback_fn,
+            options={
+                'disp': self.display_warnings,
+                'maxiter': self.max_iter
+            }
+        )
+        
+        final_point = tuple(result.x)
+        
+        # Visualize if requested
+        if visualize:
+            self.visualize_optimization(estimator, flow, final_point, ground_truth_point)
+        
+        return final_point
+    
+    def optimize_batch(self, estimator, flow_batch: np.ndarray, 
+                      starting_points: np.ndarray,
+                      weights_batch: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Optimisation séquentielle d'un batch avec L-BFGS-B.
+        
+        Args:
+            estimator: Instance de VanishingPointEstimator
+            flow_batch: Batch de flux optiques (batch_size, h, w, 2)
+            starting_points: Points de départ (batch_size, 2)
+            weights_batch: Poids optionnels (batch_size, h, w)
+            
+        Returns:
+            Points de fuite optimisés (batch_size, 2)
+        """
+        batch_size = flow_batch.shape[0]
+        final_points = []
+        
+        for i in range(batch_size):
+            single_flow = flow_batch[i]
+            single_start_point = starting_points[i]
+            single_weights = weights_batch[i] if weights_batch is not None else None
+            
+            final_point = self.optimize_single(
+                estimator, single_flow, single_start_point, single_weights
+            )
+            final_points.append(final_point)
+        
+        return np.array(final_points)
+
+
+class AdamOptimizer(BaseOptimizer):
     """
     Optimiseur Adam implémenté nativement avec MLX pour l'estimation de points de fuite.
     
@@ -46,6 +248,7 @@ class AdamOptimizer:
             plateau_threshold: Minimum improvement to continue (1e-4 optimal)
             plateau_patience: Iterations to check for improvement (3 optimal)
         """
+        super().__init__()
         self.lr = lr
         self.beta1 = beta1
         self.beta2 = beta2
@@ -54,7 +257,8 @@ class AdamOptimizer:
         self.plateau_threshold = plateau_threshold
         self.plateau_patience = plateau_patience
     
-    def optimize_single(self, estimator, single_flow: mx.array, starting_point: mx.array) -> mx.array:
+    def optimize_single(self, estimator, single_flow: mx.array, starting_point: mx.array,
+                       visualize: bool = False, ground_truth_point: Optional[Tuple[float, float]] = None) -> mx.array:
         """
         Optimise un seul échantillon avec Adam.
         
@@ -62,6 +266,8 @@ class AdamOptimizer:
             estimator: Instance de ParallelVanishingPointEstimator
             single_flow: Flux optique unique de forme (h, w, 2)
             starting_point: Point de départ [x, y]
+            visualize: Whether to visualize the optimization process
+            ground_truth_point: Optional ground truth point for visualization
             
         Returns:
             Point de fuite optimisé [x, y]
@@ -72,6 +278,10 @@ class AdamOptimizer:
         
         # Force evaluation of initial state
         mx.eval(x, m, v)
+        
+        # Reset visualization data
+        self.trajectory = [np.array(x)]
+        self.scores = [float(-estimator.colin_score(single_flow, x))]
         
         # Plateau detection - store recent scores efficiently
         recent_scores = []
@@ -97,6 +307,11 @@ class AdamOptimizer:
             x = x - self.lr * m_hat / (mx.sqrt(v_hat) + self.eps)
             mx.eval(x)
             
+            # Store trajectory and score for visualization
+            if visualize:
+                self.trajectory.append(np.array(x))
+                self.scores.append(float(-single_loss(x)))
+            
             # Efficient plateau detection
             if self.plateau_threshold > 0 and t >= 5:
                 current_score = float(-single_loss(x))
@@ -113,6 +328,11 @@ class AdamOptimizer:
                         break
         
         mx.eval(x)
+        
+        # Visualize if requested
+        if visualize:
+            self.visualize_optimization(estimator, np.array(single_flow), tuple(np.array(x)), ground_truth_point)
+        
         return x
     
     def optimize_batch(self, estimator, flow_batch: mx.array, 
@@ -159,94 +379,6 @@ class AdamOptimizer:
         result = mx.stack(final_points, axis=0)
         mx.eval(result)
         return result
-
-
-class LBFGSOptimizer:
-    """
-    Interface vers l'optimiseur L-BFGS-B de scipy pour l'estimation de points de fuite.
-    
-    Caractéristiques :
-    - Précision maximale (meilleur convergence que Adam dans la plupart des cas)
-    - Support des poids pour les vecteurs de flux
-    - Callback pour visualisation/debug
-    - Compatible avec les estimateurs numpy/scipy
-    """
-    
-    def __init__(self, 
-                 max_iter: int = 100,
-                 display_warnings: bool = False):
-        """
-        Args:
-            max_iter: Maximum iterations for L-BFGS-B
-            display_warnings: Whether to display scipy optimization warnings
-        """
-        self.max_iter = max_iter
-        self.display_warnings = display_warnings
-    
-    def optimize_single(self, estimator, flow: np.ndarray, starting_point: np.ndarray,
-                       weights: Optional[np.ndarray] = None,
-                       callback_fn: Optional[callable] = None) -> Tuple[float, float]:
-        """
-        Optimise un seul échantillon avec L-BFGS-B.
-        
-        Args:
-            estimator: Instance de VanishingPointEstimator (version numpy)
-            flow: Flux optique (h, w, 2)
-            starting_point: Point de départ [x, y]
-            weights: Poids optionnels (h, w)
-            callback_fn: Fonction callback optionnelle pour traçage
-            
-        Returns:
-            Point de fuite optimisé (x, y)
-        """
-        # Check for valid pixels
-        valid_pixels = (flow[:,:,0]**2 + flow[:,:,1]**2) > 0
-        if np.sum(valid_pixels) == 0:
-            return tuple(starting_point)
-        
-        # Optimization with L-BFGS-B
-        result = minimize(
-            lambda point: estimator.objective_function(point, flow, weights),
-            starting_point,
-            method='L-BFGS-B',
-            callback=callback_fn,
-            options={
-                'disp': self.display_warnings,
-                'maxiter': self.max_iter
-            }
-        )
-        
-        return tuple(result.x)
-    
-    def optimize_batch(self, estimator, flow_batch: np.ndarray, 
-                                 starting_points: np.ndarray,
-                                 weights_batch: Optional[np.ndarray] = None) -> np.ndarray:
-        """
-        Optimisation séquentielle d'un batch avec L-BFGS-B.
-        
-        Args:
-            estimator: Instance de VanishingPointEstimator
-            flow_batch: Batch de flux optiques (batch_size, h, w, 2)
-            starting_points: Points de départ (batch_size, 2)
-            weights_batch: Poids optionnels (batch_size, h, w)
-            
-        Returns:
-            Points de fuite optimisés (batch_size, 2)
-        """
-        batch_size = flow_batch.shape[0]
-        final_points = []
-        
-        for i in range(batch_size):
-            single_flow = flow_batch[i]
-            single_start_point = starting_points[i]
-            single_weights = weights_batch[i] if weights_batch is not None else None
-            
-            final_point = self.optimize_single(
-                estimator, single_flow, single_start_point, single_weights
-            )
-            final_points.append(final_point)
-        
-        return np.array(final_points)
 
 
 # === API Functions pour compatibilité ===

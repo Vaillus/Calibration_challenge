@@ -96,3 +96,5 @@ The project is under active development. Current focus areas:
 - [YOLOv8](https://github.com/ultralytics/ultralytics)
 - [MLX](https://github.com/ml-explore/mlx)
 
+## To add
+- [ ] Mention that the code was optimized for MLX.

@@ -110,6 +110,7 @@ class FlowFilterBase:
         return weights
     
     def _transform_values_to_weights_batch(self, values, weight_type):
+        # TODO: This is different from the sequential version, check if it's correct.
         """Batch version of weight transformation using MLX."""
         if weight_type == 'linear':
             weights = values / mx.max(values)
@@ -148,6 +149,8 @@ class FlowFilterSample(FlowFilterBase):
         Returns:
             numpy.ndarray: Filtered flow matrix
         """
+        # TODO: Would be more clear if it was linted.
+        assert flow.ndim == 3, "Flow must be a 3D array"
         h, w = flow.shape[:2]
         
         # Initialize with all True mask
@@ -317,6 +320,7 @@ class FlowFilterBatch(FlowFilterBase):
         Returns:
             mx.array: Filtered flows batch
         """
+        # TODO: Feels wrong
         # Preserve original dtype
         original_dtype = flows.dtype if hasattr(flows, 'dtype') else np.float32
         
@@ -557,6 +561,7 @@ class FlowFilterBatch(FlowFilterBase):
 if __name__ == "__main__":
     import time
     import psutil
+    from src.utilities.load_flows import load_flows
     
     def get_memory_usage():
         """Get current memory usage in MB"""
@@ -564,10 +569,10 @@ if __name__ == "__main__":
         return process.memory_info().rss / 1024 / 1024  # Convert to MB
     
     # Load data
-    flows = np.load('calib_challenge/flows/0.npy')
+    flows = load_flows(4, return_mlx=False)
     
     # Convert to MLX array once
-    xflows = mx.array(flows)
+    # xflows = mx.array(flows)
     
     print("🔬 TESTING NEW CLEAN FLOWFILTER STRUCTURE")
     print(f"Flow shape: {flows.shape}")
@@ -584,7 +589,7 @@ if __name__ == "__main__":
             'norm': {'is_used': True, 'min_threshold': 13}
         },
         'weighting': {
-            'norm': {'is_used': True, 'type': 'linear'}
+            'norm': {'is_used': False, 'type': 'linear'}
         }
     }
     

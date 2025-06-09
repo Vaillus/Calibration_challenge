@@ -56,6 +56,7 @@ def find_separation_points(flow, mask):
     Returns:
         tuple: (x, y, x_accuracy, y_accuracy)
     """
+    # TODO: Move this function and following function to a separate module (e.g., src/core/flow_analysis.py)
     flow_x = flow[..., 0]
     flow_y = flow[..., 1]
     valid_pixels = (mask == 0)

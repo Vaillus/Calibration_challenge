@@ -21,7 +21,7 @@ from src.utilities.paths import get_flows_dir
 from src.core.flow_filter import FlowFilterBatch
 from src.core.colinearity_optimization_parallel import ParallelVanishingPointEstimator
 from src.core.colinearity_optimization import VanishingPointEstimator
-from src.core.optimizers import optimize_batch as adam_optimize_batch
+from src.core.optimizers import optimize_batch as adam_optimize_batch, LBFGSOptimizer
 
 
 def benchmark_single_frame(flow_data, ground_truth_point, frame_idx=0):
@@ -70,15 +70,11 @@ def benchmark_single_frame(flow_data, ground_truth_point, frame_idx=0):
     # ===== L-BFGS-B (Version non-parallèle) =====
     print(f"\n--- L-BFGS-B (Version non-parallèle) ---")
     
-    seq_estimator = VanishingPointEstimator(
-        flow_data.shape[1], flow_data.shape[0], 
-        use_max_distance=False, use_reoptimization=False
-    )
+    seq_estimator = VanishingPointEstimator()
+    optimizer = LBFGSOptimizer(max_iter=100, display_warnings=False)
     
     start_time = time.time()
-    lbfgs_point = seq_estimator.find_vanishing_point_lbfgsb(
-        filtered_flow_np, weights=weights_np, visualize=False
-    )
+    lbfgs_point = optimizer.optimize_single(seq_estimator, filtered_flow_np, weights=weights_np)
     lbfgs_time = time.time() - start_time
     
     lbfgs_score = seq_estimator.colin_score(filtered_flow_np, lbfgs_point, weights=weights_np)

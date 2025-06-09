@@ -6,46 +6,25 @@ import mlx.core as mx
 
 from src.utilities.pixel_angle_converter import pixels_to_angles
 from src.core.flow_filter import FlowFilterSample
+from src.utilities.project_constants import get_project_constants
 
 class VanishingPointEstimator:
     # ===== Core initialization and configuration =====
-    def __init__(
-            self, 
-            frame_width, 
-            frame_height, 
-            focal_length=910, 
-            max_distance=100, 
-            use_max_distance=True,
-            use_reoptimization=True
-        ):
+    def __init__(self):
         """
         Initialize the VanishingPointEstimator.
         
         Note: Cette classe utilise maintenant les optimiseurs centralisés du module 
         core.optimizers pour L-BFGS-B. Pour Adam, utilisez AdamOptimizer directement.
-        
-        Args:
-            frame_width (int): Width of the video frames
-            frame_height (int): Height of the video frames
-            focal_length (int): Camera focal length in pixels
-            max_distance (int): Maximum allowed distance from center for vanishing point
-            use_max_distance (bool): Whether to enforce the maximum distance constraint
-            use_reoptimization (bool): Whether to use previous vanishing point as starting point
-                                       for optimization (True) or always start from default point (False)
         """
-        self.frame_width = frame_width
-        self.frame_height = frame_height
-        self.focal_length = focal_length
-        self.max_distance = max_distance
-        self.use_max_distance = use_max_distance
-        self.use_reoptimization = use_reoptimization
-        self.center_x = frame_width // 2
-        self.center_y = frame_height // 2
+        project_constants = get_project_constants()
+        self.frame_width = project_constants["frame_width"]
+        self.frame_height = project_constants["frame_height"]
+        self.center_x = self.frame_width // 2
+        self.center_y = self.frame_height // 2
         
         # Default vanishing point is the center of the image
         self.default_vanishing_point = (self.center_x, self.center_y)
-        # Previous vanishing point starts at the default
-        self.previous_vanishing_point = self.default_vanishing_point
         
         # Initialiser le filtre de flow avec une configuration par défaut
         filter_config = {
@@ -169,7 +148,23 @@ class VanishingPointEstimator:
         
         return colinearity
 
-    # ===== Optimization and estimation =====
+    # ==== Optimization and estimation =====
+    def objective_function(self, point, flow, weights=None, step=10):
+        """
+        Calculate a global colinearity score for a candidate point
+        
+        Args:
+            point: Tuple (x, y) representing the candidate point
+            flow: Optical flow vector field of shape (h, w, 2)
+            weights: Optional weight matrix of shape (h, w) to weight the importance of each flow vector
+            step: Integer, compute colinearity every 'step' pixels for faster processing
+            
+        Returns:
+            score: Numerical value, higher means better global colinearity
+        """
+        # Negative because we want to minimize in gradient descent
+        return -self.colin_score(flow, point, step, weights)
+    
     def estimate_vanishing_point(self, flow, visualize=False, ground_truth_point=None):
         """
         Estimate the vanishing point using the colinearity optimization.
@@ -193,233 +188,5 @@ class VanishingPointEstimator:
             ground_truth_point=ground_truth_point
         )
         
-        # Correct the vanishing point if needed
-        if self.use_max_distance:
-            vanishing_point = self.correct_vanishing_point(vanishing_point)
-        
-        # Update previous point for next frame
-        self.previous_vanishing_point = vanishing_point
-        
-        return vanishing_point
-    
-    def find_vanishing_point_lbfgsb(self, flow, weights=None, visualize=True, ground_truth_point=None):
-        """
-        Find the vanishing point using the L-BFGS-B algorithm
-        
-        Note: Cette méthode utilise maintenant LBFGSOptimizer du module core.optimizers
-        pour une architecture plus cohérente et modulaire.
-        
-        Args:
-            flow: Optical flow vector field of shape (h, w, 2)
-            weights: Optional weight matrix of shape (h, w) to weight the importance of each flow vector
-            visualize: Boolean indicating whether to visualize the results
-            ground_truth_point: Optional ground truth point for visualization
-            
-        Returns:
-            vanishing_point: Tuple (x, y) representing the estimated vanishing point
-        """
-        from src.core.optimizers import LBFGSOptimizer
-        
-        valid_pixels = (flow[:,:,0]**2 + flow[:,:,1]**2) > 0
-        if np.sum(valid_pixels) == 0:
-            #print("No valid pixels found")
-            #print(f"returning previous vanishing point: {self.previous_vanishing_point}")
-            return self.previous_vanishing_point
-        
-        # Choose starting point based on use_ray_optimization
-        starting_point = self.previous_vanishing_point if self.use_reoptimization else self.default_vanishing_point
-        
-        # Create LBFGSOptimizer instance
-        optimizer = LBFGSOptimizer(display_warnings=False)
-        
-        if visualize:
-            # Points and scores for visualization
-            all_points = [starting_point]
-            all_scores = [self.objective_function(starting_point, flow, weights)]
-            
-            # Callback function to record the trajectory
-            def callback(point):
-                all_points.append(point.copy())
-                all_scores.append(self.objective_function(point, flow, weights))
-            
-            # Use LBFGSOptimizer with callback for visualization
-            vanishing_point = optimizer.optimize_single(
-                self, flow, starting_point, weights, callback_fn=callback
-            )
-            
-            self.visualize_gradient_descent(flow, all_points, all_scores, vanishing_point, ground_truth_point)
-        else:
-            # Use LBFGSOptimizer without visualization overhead
-            vanishing_point = optimizer.optimize_single(
-                self, flow, starting_point, weights
-            )
-        
-        return vanishing_point
-    
-    def objective_function(self, point, flow, weights=None, step=10):
-        """
-        Calculate a global colinearity score for a candidate point
-        
-        Args:
-            point: Tuple (x, y) representing the candidate point
-            flow: Optical flow vector field of shape (h, w, 2)
-            weights: Optional weight matrix of shape (h, w) to weight the importance of each flow vector
-            step: Integer, compute colinearity every 'step' pixels for faster processing
-            
-        Returns:
-            score: Numerical value, higher means better global colinearity
-        """
-        # Negative because we want to minimize in gradient descent
-        return -self.colin_score(flow, point, step, weights)
-
-    def compute_gradient(self, point, flow, epsilon=1.0, step=10):
-        """
-        Calculate the gradient of the objective function with respect to point coordinates
-        
-        Args:
-            point: Tuple (x, y) representing the candidate point
-            flow: Optical flow vector field
-            epsilon: Small displacement for numerical approximation
-            
-        Returns:
-            gradient: Tuple (dx, dy) representing the gradient
-        """
-        x, y = point
-        
-        # Evaluate the objective function at the current point
-        f_current = self.objective_function(point, flow, step)
-        
-        # Evaluate the function after a small displacement in x
-        f_x_plus = self.objective_function((x + epsilon, y), flow, step)
-        
-        # Evaluate the function after a small displacement in y
-        f_y_plus = self.objective_function((x, y + epsilon), flow, step)
-        
-        # Calculate partial derivatives
-        df_dx = (f_x_plus - f_current) / epsilon
-        df_dy = (f_y_plus - f_current) / epsilon
-        
-        return (df_dx, df_dy)
-
-    # ===== Visualization and drawing =====
-    def visualize_gradient_descent(self, flow, trajectory, scores, final_point, ground_truth_point):
-        """
-        Visualize the gradient descent results
-        
-        Args:
-            flow: Optical flow vector field
-            trajectory: List of points visited during descent
-            scores: List of scores at each iteration
-            final_point: Final point (x, y)
-            ground_truth_point: Optional ground truth point for visualization
-        """
-        h, w = flow.shape[:2]
-        
-        plt.figure(figsize=(15, 10))
-        
-        # Plot score evolution
-        plt.subplot(2, 2, 1)
-        plt.plot([-s for s in scores])
-        plt.title('Score Evolution')
-        plt.xlabel('Iterations')
-        plt.ylabel('Score (higher = better)')
-        plt.grid(True)
-        
-        # Visualize optical flow field
-        plt.subplot(2, 2, 2)
-        
-        # Create a grid for flow visualization
-        Y, X = np.mgrid[0:h:20, 0:w:20]
-        U = flow[::20, ::20, 0]
-        V = flow[::20, ::20, 1]
-        
-        plt.imshow(np.zeros((h, w, 3)), cmap='gray')
-        plt.quiver(X, Y, U, -V, color='w', scale=50)
-        if ground_truth_point:
-            plt.scatter(ground_truth_point[0], ground_truth_point[1], c='green', s=100, marker='o', label='Ground truth')
-        plt.title('Optical Flow')
-        
-        # Visualize colinearity map for final point
-        plt.subplot(2, 2, 3)
-        colinearity_map = self.compute_colinearity_map(flow, final_point)
-        plt.imshow(colinearity_map, cmap='hot')
-        plt.colorbar(label='Colinearity')
-        if ground_truth_point:
-            plt.scatter(ground_truth_point[0], ground_truth_point[1], c='green', s=100, marker='o', label='Ground truth')
-        plt.title('Colinearity Map for Final Point')
-        
-        # Visualize descent trajectory
-        plt.subplot(2, 2, 4)
-        plt.imshow(np.zeros((h, w, 3)))
-        
-        # Convert list of tuples to numpy array for easier plotting
-        trajectory_array = np.array(trajectory)
-        plt.plot(trajectory_array[:, 0], trajectory_array[:, 1], 'r.-', linewidth=2)
-        plt.scatter(final_point[0], final_point[1], c='g', s=100, marker='*')
-        if ground_truth_point:
-            plt.scatter(ground_truth_point[0], ground_truth_point[1], c='green', s=100, marker='o', label='Ground truth')
-        
-        # Add annotations for first points
-        for i, (x, y) in enumerate(trajectory[:min(5, len(trajectory))]):
-            plt.annotate(f"{i}", (x, y), fontsize=12, color='white')
-        
-        plt.title('Gradient Descent Trajectory')
-        plt.xlim(0, w)
-        plt.ylim(h, 0)  # Invert y-axis to match image coordinates
-        if ground_truth_point:
-            plt.scatter(ground_truth_point[0], ground_truth_point[1], c='green', s=100, marker='o', label='Ground truth')
-        
-        plt.tight_layout()
-        plt.show()
-
-    def draw_vanishing_point_zone(self, frame):
-        """
-        Draw a red circle representing the legal zone for vanishing points.
-        
-        Args:
-            frame (numpy.ndarray): The frame to draw on
-        """
-        if self.use_max_distance:
-            cv2.circle(frame, (self.center_x, self.center_y), self.max_distance, (0, 0, 255), 2)
-
-    # ===== Utility methods =====
-    def correct_vanishing_point(self, vanishing_point):
-        """
-        Correct the vanishing point position if it's too far from the center.
-        
-        Args:
-            vanishing_point (tuple): (x, y) coordinates of the vanishing point
-            
-        Returns:
-            tuple: Corrected (x, y) coordinates of the vanishing point
-        """
-        vp_x, vp_y = vanishing_point
-        
-        # Calculate the distance from the center
-        dx = vp_x - self.center_x
-        dy = vp_y - self.center_y
-        distance = np.sqrt(dx**2 + dy**2)
-        
-        # If the distance is greater than max_distance pixels, use the center point
-        if distance > self.max_distance:
-            return (self.center_x, self.center_y)
-        
         return vanishing_point
 
-    def get_angles(self, vanishing_point):
-        """
-        Convert vanishing point coordinates to angles.
-        
-        Args:
-            vanishing_point (tuple): (x, y) coordinates of the vanishing point
-            
-        Returns:
-            tuple: (yaw, pitch) angles in radians
-        """
-        return pixels_to_angles(
-            vanishing_point[0], 
-            vanishing_point[1], 
-            self.focal_length, 
-            self.frame_width, 
-            self.frame_height
-        )

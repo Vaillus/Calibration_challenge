@@ -19,7 +19,7 @@ import mlx.core as mx
 
 from src.utilities.ground_truth import read_ground_truth_pixels
 from src.utilities.paths import get_flows_dir, get_outputs_dir
-from src.core.colinearity_optimization_parallel import BatchCollinearityScorer
+from src.core.collinearity_scorer_batch import BatchCollinearityScorer
 
 def load_flows_and_labels(video_id: int, max_frames: Optional[int] = None) -> Tuple[Optional[mx.array], Optional[mx.array]]:
     """

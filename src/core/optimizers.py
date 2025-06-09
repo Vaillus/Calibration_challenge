@@ -18,8 +18,8 @@ from typing import Tuple, Optional, Union, List, Dict, Any
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 
-from src.core.colinearity_optimization import CollinearityScorer
-from src.core.colinearity_optimization_parallel import BatchCollinearityScorer
+from src.core.collinearity_scorer_sample import CollinearityScorer
+from src.core.collinearity_scorer_batch import BatchCollinearityScorer
 
 
 class BaseOptimizer(ABC):

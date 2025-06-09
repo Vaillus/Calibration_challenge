@@ -115,25 +115,36 @@ class AdamOptimizer:
         mx.eval(x)
         return x
     
-    def optimize_batch_sequential(self, estimator, flow_batch: mx.array, starting_points: mx.array) -> mx.array:
+    def optimize_batch(self, estimator, flow_batch: mx.array, 
+                      starting_points: Optional[mx.array] = None) -> mx.array:
         """
-        Optimisation séquentielle d'un batch - méthode efficace pour petits/moyens batches.
+        Optimize a batch of optical flow samples to find vanishing points.
+        Note: Samples are optimized sequentially.
         
         Args:
-            estimator: Instance de ParallelVanishingPointEstimator
-            flow_batch: Batch de flux optiques (batch_size, h, w, 2)
-            starting_points: Points de départ (batch_size, 2)
+            estimator: Instance of ParallelVanishingPointEstimator
+            flow_batch: Batch of optical flows (batch_size, h, w, 2)
+            starting_points: Optional starting points (batch_size, 2)
             
         Returns:
-            Points de fuite optimisés (batch_size, 2)
+            Optimized vanishing points (batch_size, 2)
         """
         batch_size = flow_batch.shape[0]
+        
+        # Initialize starting points at image center if not provided
+        if starting_points is None:
+            center_x = flow_batch.shape[2] // 2
+            center_y = flow_batch.shape[1] // 2
+            center_point = mx.array([center_x, center_y], dtype=mx.float32)
+            starting_points = mx.tile(center_point, (batch_size, 1))
+            mx.eval(starting_points)
+        
         final_points = []
         
         for i in range(batch_size):
             single_flow = flow_batch[i]
             single_start_point = starting_points[i]
-            
+            # TODO: try reoptimizing the starting point
             mx.eval(single_flow, single_start_point)
             
             final_point = self.optimize_single(estimator, single_flow, single_start_point)
@@ -148,31 +159,6 @@ class AdamOptimizer:
         result = mx.stack(final_points, axis=0)
         mx.eval(result)
         return result
-    
-    def optimize_batch(self, estimator, flow_batch: mx.array, 
-                      starting_points: Optional[mx.array] = None) -> mx.array:
-        """
-        API principale pour l'optimisation de batch avec initialisation automatique.
-        
-        Args:
-            estimator: Instance de ParallelVanishingPointEstimator
-            flow_batch: Batch de flux optiques (batch_size, h, w, 2)
-            starting_points: Points de départ optionnels (batch_size, 2)
-            
-        Returns:
-            Points de fuite optimisés (batch_size, 2)
-        """
-        batch_size = flow_batch.shape[0]
-        
-        # Initialize starting points at image center if not provided
-        if starting_points is None:
-            center_x = flow_batch.shape[2] // 2
-            center_y = flow_batch.shape[1] // 2
-            center_point = mx.array([center_x, center_y], dtype=mx.float32)
-            starting_points = mx.tile(center_point, (batch_size, 1))
-            mx.eval(starting_points)
-        
-        return self.optimize_batch_sequential(estimator, flow_batch, starting_points)
 
 
 class LBFGSOptimizer:
@@ -232,7 +218,7 @@ class LBFGSOptimizer:
         
         return tuple(result.x)
     
-    def optimize_batch_sequential(self, estimator, flow_batch: np.ndarray, 
+    def optimize_batch(self, estimator, flow_batch: np.ndarray, 
                                  starting_points: np.ndarray,
                                  weights_batch: Optional[np.ndarray] = None) -> np.ndarray:
         """

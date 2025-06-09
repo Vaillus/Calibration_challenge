@@ -95,9 +95,9 @@ import sys
 # Imports absolus propres grâce à pip install -e .
 from src.core.flow import calculate_flow, find_separation_points
 from src.utilities.pixel_angle_converter import pixels_to_angles
-from src.core.colinearity_optimization import VanishingPointEstimator
 from src.core.segmentation import VehicleDetector
-from src.utilities.paths import get_project_root, get_inputs_dir, get_outputs_dir
+from src.utilities.paths import get_project_root
+from src.core.optimizers import LBFGSOptimizer
 
 class PredictionConfig:
     """
@@ -184,7 +184,6 @@ class VideoProcessor:
     def __init__(self, config):
         self.config = config
         self.detector = None
-        self.vp_estimator = None
         self.manual_mask = None
         self.prev_vehicle_mask = None
         self.prev_gray = None
@@ -205,13 +204,7 @@ class VideoProcessor:
         use_reoptimization = self.config.prediction_parameters.get('use_reoptimization', False)
         
         # Initialize vanishing point estimator
-        self.vp_estimator = VanishingPointEstimator(
-            frame_width, 
-            frame_height, 
-            self.config.focal_length, 
-            use_max_distance=use_max_distance,
-            use_reoptimization=use_reoptimization
-        )
+        self.optimizer = LBFGSOptimizer()
 
     def load_manual_mask(self, video_name):
         """Load manual mask if it exists"""
@@ -294,7 +287,7 @@ class VideoProcessor:
             x, y = find_separation_points(flow, combined_mask)
         elif self.config.prediction_method == "colinearity":
             # LIMITATION: Uses raw flow without filtering optimization
-            vanishing_point = self.vp_estimator.estimate_vanishing_point(flow, visualize=False)
+            vanishing_point = self.optimizer.optimize_single(flow)
             x, y = map(int, vanishing_point)
         else:
             raise ValueError(f"Méthode de prédiction inconnue: {self.config.prediction_method}")

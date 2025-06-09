@@ -1,3 +1,5 @@
+import json
+
 from src.utilities.paths import get_inputs_dir
 
 def get_project_constants():

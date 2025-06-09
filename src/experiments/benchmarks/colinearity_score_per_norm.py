@@ -19,7 +19,7 @@ import mlx.core as mx
 
 from src.utilities.ground_truth import read_ground_truth_pixels
 from src.utilities.paths import get_flows_dir, get_outputs_dir
-from src.core.colinearity_optimization_parallel import ParallelVanishingPointEstimator
+from src.core.colinearity_optimization_parallel import BatchCollinearityScorer
 
 def load_flows_and_labels(video_id: int, max_frames: Optional[int] = None) -> Tuple[Optional[mx.array], Optional[mx.array]]:
     """
@@ -191,7 +191,7 @@ def compute_colinearity_by_bins_parallel(flows_mx: mx.array, labels_mx: mx.array
     print("🔢 Calcul des scores de colinéarité par bins (version parallèle)...")
     
     # Initialiser l'estimateur parallèle
-    estimator = ParallelVanishingPointEstimator(
+    estimator = BatchCollinearityScorer(
         frame_width=int(flows_mx.shape[2]),
         frame_height=int(flows_mx.shape[1])
     )

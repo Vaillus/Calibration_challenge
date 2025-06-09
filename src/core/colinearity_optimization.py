@@ -1,21 +1,18 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import cv2
 
-import mlx.core as mx
-
-from src.utilities.pixel_angle_converter import pixels_to_angles
-from src.core.flow_filter import FlowFilterSample
 from src.utilities.project_constants import get_project_constants
 
-class VanishingPointEstimator:
+class CollinearityScorer:
     # ===== Core initialization and configuration =====
     def __init__(self):
         """
-        Initialize the VanishingPointEstimator.
-        
-        Note: Cette classe utilise maintenant les optimiseurs centralisés du module 
-        core.optimizers pour L-BFGS-B. Pour Adam, utilisez AdamOptimizer directement.
+        Initialize the CollinearityScorer.
+
+        This class computes collinearity scores between optical flow vectors and vectors from a reference point.
+        It provides methods for:
+        - Computing collinearity scores for a single frame
+        - Computing collinearity maps
+        - Handling weighted and unweighted computations
         """
         project_constants = get_project_constants()
         self.frame_width = project_constants["frame_width"]
@@ -23,27 +20,24 @@ class VanishingPointEstimator:
         self.center_x = self.frame_width // 2
         self.center_y = self.frame_height // 2
         
-        # Default vanishing point is the center of the image
-        self.default_vanishing_point = (self.center_x, self.center_y)
-        
-        # Initialiser le filtre de flow avec une configuration par défaut
-        filter_config = {
-            'filtering': {
-                'norm': {'is_used': True, 'min_threshold': 1e-2}
-            },
-            'weighting': {
-                'norm': {'is_used': True, 'type': 'linear'}
-            }
-        }
-        self.flow_filter = FlowFilterSample(filter_config)
+        # Default reference point is the center of the image
+        self.default_reference_point = (self.center_x, self.center_y)
 
-    # ===== Vector and colinearity calculations =====
+    # ===== Vector and collinearity calculations =====
 
     def colin_score(self, flow, pt, step=1, weights=None):
         """
-        Computes the colinearity between the flow vector and the vector from pt to each pixel.
+        Computes the collinearity between the flow vector and the vector from pt to each pixel.
         Skips computation for zero vectors (filtered vectors).
         
+        Args:
+            flow: Optical flow field of shape (h, w, 2)
+            pt: Tuple (x, y) representing the reference point
+            step: Integer, compute collinearity every 'step' pixels for faster processing
+            weights: Optional weight matrix of shape (h, w) to weight the importance of each flow vector
+            
+        Returns:
+            float: Collinearity score between -1 and 1
         """
         colinearity_map = self.compute_colinearity_map(flow, pt, step)
 
@@ -65,16 +59,16 @@ class VanishingPointEstimator:
 
     def compute_colinearity_map(self, flow:np.ndarray, pt:tuple, step:int=1):
         """
-        Computes the colinearity between the flow vector and the vector from pt to each pixel.
+        Computes the collinearity between the flow vector and the vector from pt to each pixel.
         Skips computation for zero vectors (filtered vectors).
         
         Args:
             flow: Optical flow field of shape (h, w, 2)
             pt: Tuple (x, y) representing the reference point
-            step: Integer, compute colinearity every 'step' pixels for faster processing (default=1)
+            step: Integer, compute collinearity every 'step' pixels for faster processing
             
         Returns:
-            numpy.ndarray: A 2D array of colinearity values between -1 and 1
+            numpy.ndarray: A 2D array of collinearity values between -1 and 1
         """
         h, w = flow.shape[:2]
         colinearity_map = np.zeros((h, w))
@@ -91,7 +85,7 @@ class VanishingPointEstimator:
                 # Get the vector from pt to this pixel
                 pixel_vector = self._get_vector_to_pixel(pt, (x, y))
                 
-                # Compute colinearity
+                # Compute collinearity
                 colinearity_value = self._compute_colinearity(flow_vector, pixel_vector)
                 
                 # Fill in the step x step block with the same value
@@ -118,7 +112,7 @@ class VanishingPointEstimator:
 
     def _compute_colinearity(self, vector1, vector2):
         """
-        Computes the colinearity between two vectors.
+        Computes the collinearity between two vectors.
         
         Args:
             vector1: Tuple (dx1, dy1) representing the first vector
@@ -148,45 +142,20 @@ class VanishingPointEstimator:
         
         return colinearity
 
-    # ==== Optimization and estimation =====
     def objective_function(self, point, flow, weights=None, step=10):
         """
-        Calculate a global colinearity score for a candidate point
+        Calculate a global negative collinearity score for a reference point.
         
         Args:
-            point: Tuple (x, y) representing the candidate point
+            point: Tuple (x, y) representing the reference point
             flow: Optical flow vector field of shape (h, w, 2)
             weights: Optional weight matrix of shape (h, w) to weight the importance of each flow vector
-            step: Integer, compute colinearity every 'step' pixels for faster processing
+            step: Integer, compute collinearity every 'step' pixels for faster processing
             
         Returns:
-            score: Numerical value, higher means better global colinearity
+            float: Global collinearity score for the reference point
         """
         # Negative because we want to minimize in gradient descent
         return -self.colin_score(flow, point, step, weights)
-    
-    def estimate_vanishing_point(self, flow, visualize=False, ground_truth_point=None):
-        """
-        Estimate the vanishing point using the colinearity optimization.
-        
-        Args:
-            flow (numpy.ndarray): Optical flow field
-            visualize (bool): Whether to visualize the optimization process
-            ground_truth_point (tuple): Optional ground truth point for visualization
-            
-        Returns:
-            tuple: (x, y) coordinates of the estimated vanishing point
-        """
-        # Filtrer le flow avant l'estimation
-        filtered_flow, weights = self.flow_filter.filter_and_weight(flow)
-        
-        # Find vanishing point using L-BFGS-B optimization
-        vanishing_point = self.find_vanishing_point_lbfgsb(
-            filtered_flow, 
-            weights,
-            visualize=visualize,
-            ground_truth_point=ground_truth_point
-        )
-        
-        return vanishing_point
+
 

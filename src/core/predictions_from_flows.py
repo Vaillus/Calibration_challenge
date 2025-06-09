@@ -32,7 +32,7 @@ from src.utilities.paths import (
 from src.utilities.ground_truth import read_ground_truth_pixels, read_ground_truth_angles
 from src.core.flow_filter import FlowFilterBatch
 from src.utilities.pixel_angle_converter import pixels_to_angles
-from src.core.optimizers import optimize_batch as adam_optimize_batch
+from src.core.optimizers import AdamOptimizer
 
 # Camera parameters
 FOCAL_LENGTH = 910
@@ -94,11 +94,7 @@ def optimize_batch_with_filtering(
         flows_to_optimize = flow_batch
     
     # Optimiser avec l'optimiseur Adam
-    predictions = adam_optimize_batch(
-        flows_to_optimize, 
-        plateau_threshold=plateau_threshold, 
-        plateau_patience=plateau_patience
-    )
+    predictions = AdamOptimizer(plateau_threshold=plateau_threshold, plateau_patience=plateau_patience).optimize_batch(flows_to_optimize)
     mx.eval(predictions)
     
     return predictions

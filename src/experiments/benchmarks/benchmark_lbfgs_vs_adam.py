@@ -19,9 +19,9 @@ import gc
 from src.utilities.ground_truth import read_ground_truth_pixels
 from src.utilities.paths import get_flows_dir
 from src.core.flow_filter import FlowFilterBatch
-from src.core.colinearity_optimization_parallel import ParallelVanishingPointEstimator
-from src.core.colinearity_optimization import VanishingPointEstimator
-from src.core.optimizers import optimize_batch as adam_optimize_batch, LBFGSOptimizer
+from src.core.colinearity_optimization_parallel import BatchCollinearityScorer
+from src.core.colinearity_optimization import CollinearityScorer
+from src.core.optimizers import AdamOptimizer, LBFGSOptimizer
 
 
 def benchmark_single_frame(flow_data, ground_truth_point, frame_idx=0):
@@ -70,11 +70,11 @@ def benchmark_single_frame(flow_data, ground_truth_point, frame_idx=0):
     # ===== L-BFGS-B (Version non-parallèle) =====
     print(f"\n--- L-BFGS-B (Version non-parallèle) ---")
     
-    seq_estimator = VanishingPointEstimator()
+    seq_estimator = CollinearityScorer()
     optimizer = LBFGSOptimizer(max_iter=100, display_warnings=False)
     
     start_time = time.time()
-    lbfgs_point = optimizer.optimize_single(seq_estimator, filtered_flow_np, weights=weights_np)
+    lbfgs_point = optimizer.optimize_single(filtered_flow_np, weights=weights_np)
     lbfgs_time = time.time() - start_time
     
     lbfgs_score = seq_estimator.colin_score(filtered_flow_np, lbfgs_point, weights=weights_np)
@@ -103,13 +103,15 @@ def benchmark_single_frame(flow_data, ground_truth_point, frame_idx=0):
     print(f"\n--- Adam (Version parallèle) ---")
     
     # Create estimator for score calculation
-    par_estimator = ParallelVanishingPointEstimator(
+    par_estimator = BatchCollinearityScorer(
         flow_data.shape[1], flow_data.shape[0], 
         use_max_distance=False, use_reoptimization=False
     )
     
     start_time = time.time()
-    adam_points = adam_optimize_batch(
+    adam_points = AdamOptimizer(plateau_threshold=0, plateau_patience=3).optimize_batch(filtered_flow_batch)
+    
+    adam_optimize_batch(
         filtered_flow_batch, 
         plateau_threshold=0,  # Disable early stopping - run full 50 iterations
         plateau_patience=3

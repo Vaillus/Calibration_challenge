@@ -16,11 +16,15 @@ from scipy.optimize import minimize
 import gc
 from typing import Tuple, Optional, Union, List, Dict, Any
 import matplotlib.pyplot as plt
+from abc import ABC, abstractmethod
+
+from src.core.colinearity_optimization import CollinearityScorer
+from src.core.colinearity_optimization_parallel import BatchCollinearityScorer
 
 
-class BaseOptimizer:
+class BaseOptimizer(ABC):
     """
-    Base class for all optimizers with common visualization functionality.
+    Abstract base class for all optimizers with common visualization functionality.
     
     This class provides:
     - Common visualization interface
@@ -32,8 +36,33 @@ class BaseOptimizer:
         """Initialize the base optimizer with empty visualization state."""
         self.trajectory = []
         self.scores = []
+        self.estimator = None
     
-    def visualize_optimization(self, estimator, flow: np.ndarray, final_point: Tuple[float, float], 
+    @abstractmethod
+    def optimize_single(self, flow, starting_point, **kwargs):
+        """
+        Abstract method that must be implemented by subclasses to optimize a single sample.
+        
+        Args:
+            flow: The optical flow data
+            starting_point: Initial point for optimization
+            **kwargs: Additional arguments specific to the optimizer implementation
+        """
+        pass
+    
+    @abstractmethod
+    def optimize_batch(self, flow_batch, starting_points=None, **kwargs):
+        """
+        Abstract method that must be implemented by subclasses to optimize a batch of samples.
+        
+        Args:
+            flow_batch: Batch of optical flow data
+            starting_points: Optional starting points for the batch
+            **kwargs: Additional arguments specific to the optimizer implementation
+        """
+        pass
+    
+    def visualize_optimization(self, flow: np.ndarray, final_point: Tuple[float, float], 
                              ground_truth_point: Optional[Tuple[float, float]] = None):
         """
         Visualize the optimization results.
@@ -44,6 +73,7 @@ class BaseOptimizer:
             final_point: Final optimized point (x, y)
             ground_truth_point: Optional ground truth point for visualization
         """
+        assert self.estimator is not None, "Estimator must be set before visualizing"
         h, w = flow.shape[:2]
         
         plt.figure(figsize=(15, 10))
@@ -72,7 +102,7 @@ class BaseOptimizer:
         
         # Visualize colinearity map for final point
         plt.subplot(2, 2, 3)
-        colinearity_map = estimator.compute_colinearity_map(flow, final_point)
+        colinearity_map = self.estimator.compute_colinearity_map(flow, final_point)
         plt.imshow(colinearity_map, cmap='hot')
         plt.colorbar(label='Colinearity')
         if ground_truth_point:
@@ -112,10 +142,11 @@ class LBFGSOptimizer(BaseOptimizer):
     - Callback pour visualisation/debug
     - Compatible avec les estimateurs numpy/scipy
     """
-    
-    def __init__(self, 
-                 max_iter: int = 100,
-                 display_warnings: bool = False):
+    def __init__(
+        self, 
+        max_iter: int = 100,
+        display_warnings: bool = False
+    ):
         """
         Args:
             max_iter: Maximum iterations for L-BFGS-B
@@ -124,14 +155,15 @@ class LBFGSOptimizer(BaseOptimizer):
         super().__init__()
         self.max_iter = max_iter
         self.display_warnings = display_warnings
+        # We use the numpy version of the estimator because the function scipy.optimize.minimize does not support mx.array
+        self.estimator = CollinearityScorer()
     
     def optimize_single(
             self, 
-            estimator, 
             flow: np.ndarray, 
             starting_point: Optional[np.ndarray] = None,
             weights: Optional[np.ndarray] = None,
-            visualize: bool = False,
+            visualize: Optional[bool] = False,
             ground_truth_point: Optional[Tuple[float, float]] = None
         ) -> Tuple[float, float]:
         """
@@ -158,19 +190,19 @@ class LBFGSOptimizer(BaseOptimizer):
         
         # Reset visualization data
         self.trajectory = [starting_point]
-        self.scores = [estimator.objective_function(starting_point, flow, weights)]
+        self.scores = [self.estimator.objective_function(starting_point, flow, weights)]
         
         # Create callback if visualization is enabled
         callback_fn = None
         if visualize:
             def callback(point):
                 self.trajectory.append(point.copy())
-                self.scores.append(estimator.objective_function(point, flow, weights))
+                self.scores.append(self.estimator.objective_function(point, flow, weights))
             callback_fn = callback
         
         # Optimization with L-BFGS-B
         result = minimize(
-            lambda point: estimator.objective_function(point, flow, weights),
+            lambda point: self.estimator.objective_function(point, flow, weights),
             starting_point,
             method='L-BFGS-B',
             callback=callback_fn,
@@ -184,11 +216,11 @@ class LBFGSOptimizer(BaseOptimizer):
         
         # Visualize if requested
         if visualize:
-            self.visualize_optimization(estimator, flow, final_point, ground_truth_point)
+            self.visualize_optimization(flow, final_point, ground_truth_point)
         
         return final_point
     
-    def optimize_batch(self, estimator, flow_batch: np.ndarray, 
+    def optimize_batch(self, flow_batch: np.ndarray, 
                       starting_points: np.ndarray,
                       weights_batch: Optional[np.ndarray] = None) -> np.ndarray:
         """
@@ -211,8 +243,7 @@ class LBFGSOptimizer(BaseOptimizer):
             single_start_point = starting_points[i]
             single_weights = weights_batch[i] if weights_batch is not None else None
             
-            final_point = self.optimize_single(
-                estimator, single_flow, single_start_point, single_weights
+            final_point = self.optimize_single(single_flow, single_start_point, single_weights
             )
             final_points.append(final_point)
         
@@ -256,9 +287,15 @@ class AdamOptimizer(BaseOptimizer):
         self.max_iter = max_iter
         self.plateau_threshold = plateau_threshold
         self.plateau_patience = plateau_patience
+        self.estimator = BatchCollinearityScorer()
     
-    def optimize_single(self, estimator, single_flow: mx.array, starting_point: mx.array,
-                       visualize: bool = False, ground_truth_point: Optional[Tuple[float, float]] = None) -> mx.array:
+    def optimize_single(
+        self, 
+        single_flow: mx.array, 
+        starting_point: mx.array,
+        visualize: bool = False, 
+        ground_truth_point: Optional[Tuple[float, float]] = None
+    ) -> mx.array:
         """
         Optimise un seul échantillon avec Adam.
         
@@ -281,7 +318,7 @@ class AdamOptimizer(BaseOptimizer):
         
         # Reset visualization data
         self.trajectory = [np.array(x)]
-        self.scores = [float(-estimator.colin_score(single_flow, x))]
+        self.scores = [float(-self.estimator.colin_score(single_flow, x))]
         
         # Plateau detection - store recent scores efficiently
         recent_scores = []
@@ -289,7 +326,7 @@ class AdamOptimizer(BaseOptimizer):
         for t in range(1, self.max_iter + 1):
             # Loss function for single sample - returns scalar
             def single_loss(point):
-                score = estimator.colin_score(single_flow, point)
+                score = self.estimator.colin_score(single_flow, point)
                 return -score  # Negative because we want to maximize score
             
             # Compute gradient
@@ -331,11 +368,12 @@ class AdamOptimizer(BaseOptimizer):
         
         # Visualize if requested
         if visualize:
-            self.visualize_optimization(estimator, np.array(single_flow), tuple(np.array(x)), ground_truth_point)
+            self.visualize_optimization(
+                np.array(single_flow), tuple(np.array(x)), ground_truth_point)
         
         return x
     
-    def optimize_batch(self, estimator, flow_batch: mx.array, 
+    def optimize_batch(self, flow_batch: mx.array, 
                       starting_points: Optional[mx.array] = None) -> mx.array:
         """
         Optimize a batch of optical flow samples to find vanishing points.
@@ -367,7 +405,7 @@ class AdamOptimizer(BaseOptimizer):
             # TODO: try reoptimizing the starting point
             mx.eval(single_flow, single_start_point)
             
-            final_point = self.optimize_single(estimator, single_flow, single_start_point)
+            final_point = self.optimize_single(single_flow, single_start_point)
             mx.eval(final_point)
             
             final_points.append(final_point)
@@ -379,22 +417,3 @@ class AdamOptimizer(BaseOptimizer):
         result = mx.stack(final_points, axis=0)
         mx.eval(result)
         return result
-
-
-# === API Functions pour compatibilité ===
-
-
-def optimize_batch(flow_batch, plateau_threshold=1e-4, plateau_patience=3):
-    """
-    API de compatibilité pour optimize_batch.
-    Utilise maintenant la classe AdamOptimizer.
-    """
-    from src.core.colinearity_optimization_parallel import ParallelVanishingPointEstimator
-    
-    estimator = ParallelVanishingPointEstimator(
-        flow_batch.shape[2], flow_batch.shape[1], 
-        use_max_distance=False, use_reoptimization=False
-    )
-    
-    optimizer = AdamOptimizer(plateau_threshold=plateau_threshold, plateau_patience=plateau_patience)
-    return optimizer.optimize_batch(estimator, flow_batch) 

@@ -1,61 +1,45 @@
 import numpy as np
 import mlx.core as mx
-from src.core.colinearity_optimization import VanishingPointEstimator
 import psutil
-import mlx.core.metal as metal
 from pathlib import Path
 import gc
 import time
 from src.core.flow_filter import FlowFilterBatch
+from src.utilities.project_constants import get_project_constants
 
-class ParallelVanishingPointEstimator(VanishingPointEstimator):
+class BatchCollinearityScorer:
     """
-    Parallel version of VanishingPointEstimator using MLX for Apple Silicon optimization.
-    This class provides optimized versions of the core computation methods using MLX's
-    parallel processing capabilities, which are particularly efficient on Apple Silicon chips.
-    
-    The main optimizations include:
-    - Vectorized operations using MLX arrays
-    - Pre-computed coordinate grids
-    - Reduced memory allocations
-    
+    Batch version of CollinearityScorer using MLX for efficient batch processing.
+
+    This class provides optimized methods for computing collinearity scores and maps
+    for multiple frames simultaneously using MLX's parallel processing capabilities.
+    It is particularly efficient on Apple Silicon chips.
+
+    Key features:
+    - Batch processing of multiple frames
+    - MLX-optimized vectorized operations
+    - Pre-computed coordinate grids for efficiency
+    - Memory-efficient processing with configurable batch sizes
+
     Example:
-        >>> estimator = ParallelVanishingPointEstimator(1920, 1080)
-        >>> flow = np.random.rand(1080, 1920, 2)  # Example flow field
-        >>> pt = (960, 540)  # Center point
-        >>> colinearity_map = estimator.compute_colinearity_map(flow, pt)
+        >>> scorer = BatchCollinearityScorer()
+        >>> flow_batch = mx.array(np.random.rand(10, 1080, 1920, 2))  # Batch of 10 flows
+        >>> points = mx.array([[960, 540] for _ in range(10)])  # Batch of 10 points
+        >>> scores = scorer.colin_score_batch(flow_batch, points)
     """
     
-    def __init__(
-            self, 
-            frame_width, 
-            frame_height, 
-            focal_length=910, 
-            max_distance=100, 
-            use_max_distance=True,
-            use_reoptimization=True
-        ):
+    def __init__(self):
         """
-        Initialize the ParallelVanishingPointEstimator.
+        Initialize the BatchCollinearityScorer.
+        """
+        project_constants = get_project_constants()
+        self.frame_width = project_constants["frame_width"]
+        self.frame_height = project_constants["frame_height"]
+        self.center_x = self.frame_width // 2
+        self.center_y = self.frame_height // 2
         
-        Args:
-            frame_width (int): Width of the video frames
-            frame_height (int): Height of the video frames
-            focal_length (int): Camera focal length in pixels
-            max_distance (int): Maximum allowed distance from center for vanishing point
-            use_max_distance (bool): Whether to enforce the maximum distance constraint
-            use_reoptimization (bool): Whether to use previous vanishing point as starting point
-                                       for optimization (True) or always start from default point (False)
-        """
-        # Initialize parent class
-        super().__init__(
-            frame_width=frame_width,
-            frame_height=frame_height,
-            focal_length=focal_length,
-            max_distance=max_distance,
-            use_max_distance=use_max_distance,
-            use_reoptimization=use_reoptimization
-        )
+        # Default reference point is the center of the image
+        self.default_reference_point = (self.center_x, self.center_y)
         
         # Pre-compute coordinate grids for parallel computation
         self._init_coordinate_grids()
@@ -66,86 +50,13 @@ class ParallelVanishingPointEstimator(VanishingPointEstimator):
         self.y_coords_base = mx.arange(0, self.frame_height)[:, None]  # Shape: (h, 1)
         self.x_coords_base = mx.arange(0, self.frame_width)[None, :]   # Shape: (1, w)
 
-    def _check_and_convert_inputs(self, flow, weights=None):
-        """
-        Check input types and convert to MLX arrays if necessary.
-        
-        Args:
-            flow: Optical flow field (numpy array or MLX array)
-            weights: Optional weight matrix (numpy array or MLX array)
-            
-        Returns:
-            tuple: (flow_mx, weights_mx) where weights_mx is None if weights is None
-        """
-        # Check flow type and shape
-        assert isinstance(flow, (np.ndarray, mx.array)), "flow must be numpy array or MLX array"
-        if isinstance(flow, np.ndarray):
-            flow_mx = mx.array(flow)
-        else:
-            flow_mx = flow
 
-        assert flow_mx.shape[:2] == (self.frame_height, self.frame_width), \
-            f"flow shape {flow_mx.shape[:2]} doesn't match frame dimensions {(self.frame_height, self.frame_width)}"
-
-        # Check weights if provided
-        weights_mx = None
-        if weights is not None:
-            assert isinstance(weights, (np.ndarray, mx.array)), "weights must be numpy array or MLX array"
-            if isinstance(weights, np.ndarray):
-                weights_mx = mx.array(weights)
-            else:
-                weights_mx = weights
-            assert weights_mx.shape == (self.frame_height, self.frame_width), \
-                f"weights shape {weights_mx.shape} doesn't match frame dimensions"
-
-        return flow_mx, weights_mx
-
-    def compute_colinearity_map(self, flow:np.ndarray, pt:tuple, step:int=1):
-        """
-        Parallel version of compute_colinearity_map using MLX for Apple Silicon optimization.
-        
-        Args:
-            flow: Optical flow field of shape (h, w, 2)
-            pt: Tuple (x, y) representing the reference point
-            step: Integer, compute colinearity every 'step' pixels (ignored in parallel version)
-            
-        Returns:
-            mlx.core.array: A 2D array of colinearity values between -1 and 1
-        """
-        # Check and convert inputs
-        flow_mx, _ = self._check_and_convert_inputs(flow)
-        pt_x, pt_y = pt
-        
-        # Get flow vectors
-        flow_x = flow_mx[:, :, 0]  # Shape: (h, w)
-        flow_y = flow_mx[:, :, 1]  # Shape: (h, w)
-        
-        # Create pixel vectors using pre-computed grids
-        pixel_x = self.x_coords_base - pt_x
-        pixel_y = self.y_coords_base - pt_y
-        
-        # Compute magnitudes and dot product
-        flow_mag = mx.sqrt(flow_x**2 + flow_y**2)
-        pixel_mag = mx.sqrt(pixel_x**2 + pixel_y**2)
-        dot_product = flow_x * pixel_x + flow_y * pixel_y
-        
-        # Compute colinearity (avoiding division by zero)
-        mask = (flow_mag > 0) & (pixel_mag > 0)
-        colinearity = mx.where(
-            mask,
-            dot_product / (flow_mag * pixel_mag),
-            mx.zeros_like(dot_product)
-        )
-        
-        return colinearity  # Return MLX array directly
-
+    # ==== SCORE FUNCTIONS ====
     def colin_score(self, flow, pt, step=1, weights=None):
         """
         Gradient-compatible version of colin_score using MLX.
         This version is optimized for gradient computation and mirrors the logic
         of colin_score_batch but for a single sample.
-        
-        Assumes all inputs are in float32 format (conversion handled at script level).
         
         Args:
             flow: Optical flow field of shape (h, w, 2) - MLX array (float32)
@@ -153,7 +64,7 @@ class ParallelVanishingPointEstimator(VanishingPointEstimator):
             weights: Optional weight matrix of shape (h, w) - MLX array (float32)
             
         Returns:
-            mlx.core.array: Scalar colinearity score
+            mlx.core.array: Scalar collinearity score
         """
         # Ensure inputs are MLX arrays (assume float32)
         if not isinstance(flow, mx.array):
@@ -198,28 +109,79 @@ class ParallelVanishingPointEstimator(VanishingPointEstimator):
             score = weighted_sum / (total_valid + eps)
         
         return score
-
-    def _get_optimal_chunk_size(self, total_size, memory_limit_mb=1024):
+    
+    def compute_colinearity_map(self, flow:np.ndarray, pt:tuple, step:int=1):
         """
-        Determine optimal chunk size based on available memory.
+        Parallel version of compute_colinearity_map using MLX for Apple Silicon optimization.
         
         Args:
-            total_size: Total number of items to process
-            memory_limit_mb: Memory limit in MB (default: 1GB)
+            flow: Optical flow field of shape (h, w, 2)
+            pt: Tuple (x, y) representing the reference point
+            step: Integer, compute collinearity every 'step' pixels (ignored in parallel version)
             
         Returns:
-            int: Optimal chunk size
+            mlx.core.array: A 2D array of collinearity values between -1 and 1
         """
-        # Estimate memory per item (rough estimate)
-        # Each item needs: flow (h*w*2*4) + points (2*4) + intermediate results
-        bytes_per_item = (self.frame_height * self.frame_width * 2 * 4) + (2 * 4)
-        bytes_per_item *= 2  # Factor for intermediate results
+        # Check and convert inputs
+        flow_mx, _ = self._check_and_convert_inputs(flow)
+        pt_x, pt_y = pt
         
-        # Calculate how many items we can fit in memory
-        memory_limit_bytes = memory_limit_mb * 1024 * 1024
-        chunk_size = max(1, min(total_size, memory_limit_bytes // bytes_per_item))
+        # Get flow vectors
+        flow_x = flow_mx[:, :, 0]  # Shape: (h, w)
+        flow_y = flow_mx[:, :, 1]  # Shape: (h, w)
         
-        return chunk_size
+        # Create pixel vectors using pre-computed grids
+        pixel_x = self.x_coords_base - pt_x
+        pixel_y = self.y_coords_base - pt_y
+        
+        # Compute magnitudes and dot product
+        flow_mag = mx.sqrt(flow_x**2 + flow_y**2)
+        pixel_mag = mx.sqrt(pixel_x**2 + pixel_y**2)
+        dot_product = flow_x * pixel_x + flow_y * pixel_y
+        
+        # Compute colinearity (avoiding division by zero)
+        mask = (flow_mag > 0) & (pixel_mag > 0)
+        colinearity = mx.where(
+            mask,
+            dot_product / (flow_mag * pixel_mag),
+            mx.zeros_like(dot_product)
+        )
+        
+        return colinearity  # Return MLX array directly
+
+    def _check_and_convert_inputs(self, flow, weights=None):
+        """
+        Check input types and convert to MLX arrays if necessary.
+        
+        Args:
+            flow: Optical flow field (numpy array or MLX array)
+            weights: Optional weight matrix (numpy array or MLX array)
+            
+        Returns:
+            tuple: (flow_mx, weights_mx) where weights_mx is None if weights is None
+        """
+        # Check flow type and shape
+        assert isinstance(flow, (np.ndarray, mx.array)), "flow must be numpy array or MLX array"
+        if isinstance(flow, np.ndarray):
+            flow_mx = mx.array(flow)
+        else:
+            flow_mx = flow
+
+        assert flow_mx.shape[:2] == (self.frame_height, self.frame_width), \
+            f"flow shape {flow_mx.shape[:2]} doesn't match frame dimensions {(self.frame_height, self.frame_width)}"
+
+        # Check weights if provided
+        weights_mx = None
+        if weights is not None:
+            assert isinstance(weights, (np.ndarray, mx.array)), "weights must be numpy array or MLX array"
+            if isinstance(weights, np.ndarray):
+                weights_mx = mx.array(weights)
+            else:
+                weights_mx = weights
+            assert weights_mx.shape == (self.frame_height, self.frame_width), \
+                f"weights shape {weights_mx.shape} doesn't match frame dimensions"
+
+        return flow_mx, weights_mx
 
     def colin_score_batch(self, flows:mx.array, points:mx.array, weights:mx.array=None, chunk_size:int=30):
         """
@@ -234,8 +196,8 @@ class ParallelVanishingPointEstimator(VanishingPointEstimator):
             weights: Optional weight matrix of shape (h, w) or (batch_size, h, w)
                     Can be either numpy array or MLX array.
                     These weights are used to give more importance to certain pixels
-                    when computing the colinearity score. Higher weights mean the pixel's
-                    colinearity will have more impact on the final score.
+                    when computing the collinearity score. Higher weights mean the pixel's
+                    collinearity will have more impact on the final score.
             chunk_size: Size of chunks to process in parallel (default: 30)
             
         Returns:
@@ -320,6 +282,19 @@ class ParallelVanishingPointEstimator(VanishingPointEstimator):
         return all_scores
     
     def colin_score_batch_simple(self, flows, points, weights=None, chunk_size=30): 
+        """
+        Simplified version of colin_score_batch that processes all samples at once.
+        Faster but uses more memory.
+        
+        Args:
+            flows: Batch of optical flow fields of shape (batch_size, h, w, 2)
+            points: Batch of points of shape (batch_size, 2)
+            weights: Optional weight matrix of shape (h, w) or (batch_size, h, w)
+            chunk_size: Ignored in this version
+            
+        Returns:
+            mlx.core.array: Array of scores of shape (batch_size,)
+        """
         batch_size = flows.shape[0]
         
         # Coordonnées
@@ -345,7 +320,19 @@ class ParallelVanishingPointEstimator(VanishingPointEstimator):
         return scores
     
     def _get_chunk(self, flows, points, weights, start_idx, end_idx):
-        """Get a chunk of flows, points, and weights"""
+        """
+        Get a chunk of flows, points, and weights for batch processing.
+        
+        Args:
+            flows: Full batch of flows
+            points: Full batch of points
+            weights: Full batch of weights
+            start_idx: Start index for chunk
+            end_idx: End index for chunk
+            
+        Returns:
+            tuple: (flows_chunk, points_chunk, weights_chunk)
+        """
         if weights is not None:
             if weights.ndim == 2:
                 weights_chunk = weights[None, :, :]
@@ -406,12 +393,7 @@ if __name__ == "__main__":
     print(f"Initial memory usage: {get_memory_usage():.1f} MB")
     
     # Initialize estimator
-    pve = ParallelVanishingPointEstimator(
-        frame_width=1164,  # Hardcoded for now, could be read from first flow
-        frame_height=874,
-        use_max_distance=False, 
-        use_reoptimization=False
-    )
+    pve = BatchCollinearityScorer()
     
     # Initialize filter
     filter_config = {

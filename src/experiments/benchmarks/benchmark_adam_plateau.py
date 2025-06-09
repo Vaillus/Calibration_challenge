@@ -21,7 +21,7 @@ import gc
 
 # Imports absolus
 from src.utilities.ground_truth import read_ground_truth_pixels
-from src.core.optimizers import optimize_batch
+from src.core.optimizers import AdamOptimizer
 
 
 def benchmark_plateau_detection(max_frames=20, video_id=0):
@@ -104,11 +104,8 @@ def benchmark_plateau_detection(max_frames=20, video_id=0):
             mx.eval(flow_batch)
             
             start_time = time.time()
-            preds_batch = optimize_batch(
-                flow_batch, 
-                plateau_threshold=config['threshold'], 
-                plateau_patience=config['patience']
-            )
+            preds_batch = AdamOptimizer(plateau_threshold=config['threshold'], plateau_patience=config['patience']).optimize_batch(flow_batch)
+            
             mx.eval(preds_batch)
             batch_time = time.time() - start_time
             

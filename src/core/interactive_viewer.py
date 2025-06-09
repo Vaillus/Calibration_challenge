@@ -5,7 +5,6 @@ import os
 # Imports absolus propres grâce à pip install -e .
 from src.core.segmentation import VehicleDetector
 from src.core.flow import calculate_flow, find_separation_points
-from src.core.colinearity_optimization import VanishingPointEstimator
 from src.utilities.ground_truth import read_ground_truth_pixels, read_ground_truth_angles
 from src.core.rendering import (
     create_control_panel,
@@ -279,15 +278,13 @@ def position_video_at_frame(cap, start_frame):
         
     return True, first_frame
 
-def handle_keyboard_input(key, state, detector, vp_estimator, gt_pixels, gt_angles, pred_pixels, show_vp=True):
+def handle_keyboard_input(key, state, gt_pixels, gt_angles, pred_pixels, show_vp=True):
     """
     Handle keyboard input and update state accordingly.
     
     Args:
         key (int): Key code from cv2.waitKey
         state (VisualizationState): Current visualization state
-        detector (VehicleDetector): Vehicle detector instance
-        vp_estimator (VanishingPointEstimator): Vanishing point estimator instance
         gt_pixels (list): Ground truth pixel coordinates
         gt_angles (list): Ground truth angles
         pred_pixels (list): Predicted pixel coordinates
@@ -311,11 +308,11 @@ def handle_keyboard_input(key, state, detector, vp_estimator, gt_pixels, gt_angl
         
         # Recreate visualization with current frame
         if state.frame is not None and state.flow is not None and state.combined_mask is not None:
-            update_visualization(state, detector, vp_estimator, gt_pixels, gt_angles, pred_pixels, show_vp)
+            update_visualization(state, gt_pixels, gt_angles, pred_pixels, show_vp)
     
     return True  # Continue running
 
-def process_frame(cap, state, detector, vp_estimator, gt_pixels, flows, show_vp=True):
+def process_frame(cap, state, detector, flows):
     """
     Process a single frame: read, detect vehicles, load flow, estimate vanishing point.
     
@@ -359,35 +356,33 @@ def process_frame(cap, state, detector, vp_estimator, gt_pixels, flows, show_vp=
         return False
     
     # Calculate vanishing point only if needed
-    if show_vp:
-        # Get ground truth point for visualization if available
-        ground_truth_point = None
-        if state.current_frame_number < len(gt_pixels):
-            ground_truth_point = gt_pixels[state.current_frame_number]
+    # if show_vp:
+    #     # Get ground truth point for visualization if available
+    #     ground_truth_point = None
+    #     if state.current_frame_number < len(gt_pixels):
+    #         ground_truth_point = gt_pixels[state.current_frame_number]
         
-        # Estimate vanishing point
-        state.vanishing_point = vp_estimator.estimate_vanishing_point(
-            state.flow,
-            visualize=False,
-            ground_truth_point=ground_truth_point
-        )
-    else:
-        # Set a dummy vanishing point to avoid errors
-        state.vanishing_point = (0, 0)
+    #     # Estimate vanishing point
+    #     state.vanishing_point = vp_estimator.estimate_vanishing_point(
+    #         state.flow,
+    #         visualize=False,
+    #         ground_truth_point=ground_truth_point
+    #     )
+    # else:
+    #     # Set a dummy vanishing point to avoid errors
+        # state.vanishing_point = (0, 0)
     
     # Update state for next iteration
     state.prev_vehicle_mask = state.current_vehicle_mask
     
     return True
 
-def update_visualization(state, detector, vp_estimator, gt_pixels, gt_angles, pred_pixels, show_vp=True):
+def update_visualization(state, gt_pixels, gt_angles, pred_pixels, show_vp=True):
     """
     Update visualization based on current state and visualization type.
     
     Args:
         state (VisualizationState): Current visualization state
-        detector (VehicleDetector): Vehicle detector instance
-        vp_estimator (VanishingPointEstimator): Vanishing point estimator instance
         gt_pixels (list): Ground truth pixel coordinates
         gt_angles (list): Ground truth angles
         pred_pixels (list): Predicted pixel coordinates
@@ -397,8 +392,8 @@ def update_visualization(state, detector, vp_estimator, gt_pixels, gt_angles, pr
         output = visualize_flow_arrows(state.frame, state.flow, state.combined_mask)
         
         # Draw the legal zone for vanishing points (only if vp_estimator exists)
-        if vp_estimator is not None:
-            vp_estimator.draw_vanishing_point_zone(output)
+        # if vp_estimator is not None:
+        #     vp_estimator.draw_vanishing_point_zone(output)
         
         # Add ground truth point if available
         if state.current_frame_number < len(gt_pixels):
@@ -432,8 +427,8 @@ def update_visualization(state, detector, vp_estimator, gt_pixels, gt_angles, pr
         output = visualize_separation_points(state.frame, best_x, best_y)
         
         # Draw the legal zone for vanishing points (only if vp_estimator exists)
-        if vp_estimator is not None:
-            vp_estimator.draw_vanishing_point_zone(output)
+        # if vp_estimator is not None:
+        #     vp_estimator.draw_vanishing_point_zone(output)
         
         # Add ground truth if available
         if state.current_frame_number < len(gt_pixels):
@@ -444,8 +439,8 @@ def update_visualization(state, detector, vp_estimator, gt_pixels, gt_angles, pr
     else:  # viz_type == "3"
         output = create_flow_visualization(state.flow, state.combined_mask, state.frame)
         # Draw the legal zone for vanishing points (only if vp_estimator exists)
-        if vp_estimator is not None:
-            vp_estimator.draw_vanishing_point_zone(output)
+        # if vp_estimator is not None:
+        #     vp_estimator.draw_vanishing_point_zone(output)
     
     # Add frame info
     output = add_frame_info(
@@ -503,10 +498,10 @@ def main(video_index, start_frame, predictions_dir="3", show_vp=True):
     # 3. Processing components
     detector = VehicleDetector()
     # Only create VanishingPointEstimator if needed
-    if show_vp:
-        vp_estimator = VanishingPointEstimator(frame_width, frame_height, FOCAL_LENGTH, use_max_distance=False, use_reoptimization=False)
-    else:
-        vp_estimator = None
+    # if show_vp:
+    #     vp_estimator = (frame_width, frame_height, FOCAL_LENGTH, use_max_distance=False, use_reoptimization=False)
+    # else:
+    #     vp_estimator = None
     
     # 4. Flow tracking state
     viz_state.prev_vehicle_mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
@@ -524,8 +519,8 @@ def main(video_index, start_frame, predictions_dir="3", show_vp=True):
         running = handle_keyboard_input(
             key, 
             viz_state, 
-            detector, 
-            vp_estimator, 
+            # detector, 
+            # vp_estimator, 
             gt_pixels, 
             gt_angles, 
             pred_pixels,
@@ -537,7 +532,7 @@ def main(video_index, start_frame, predictions_dir="3", show_vp=True):
         
         # Process frame if not paused
         if not viz_state.paused:
-            success = process_frame(cap, viz_state, detector, vp_estimator, gt_pixels, flows, show_vp)
+            success = process_frame(cap, viz_state, detector,flows)
             if not success:
                 break
         
@@ -545,8 +540,8 @@ def main(video_index, start_frame, predictions_dir="3", show_vp=True):
         if viz_state.frame is not None:
             update_visualization(
                 viz_state, 
-                detector, 
-                vp_estimator, 
+                # detector, 
+                # vp_estimator, 
                 gt_pixels, 
                 gt_angles, 
                 pred_pixels,

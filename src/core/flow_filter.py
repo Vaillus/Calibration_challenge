@@ -75,31 +75,40 @@ class FlowFilterBase:
         Returns:
             numpy.ndarray: Transformed weights between 0 and 1
         """
-        if np.max(values) == 0:
+        # Get non-zero values
+        non_zero_mask = values > 0
+        non_zero_values = values[non_zero_mask]
+        
+        if len(non_zero_values) == 0:
             return np.zeros_like(values)
         
-        # Normalize values to [0, 1] range
-        normalized_values = values / np.max(values)
+        # Get min and max of non-zero values
+        min_non_zero = np.min(non_zero_values)
+        max_non_zero = np.max(non_zero_values)
+        
+        # Initialize weights array
+        weights = np.zeros_like(values)
         
         if weight_type == 'linear':
-            weights = normalized_values
+            # Apply min-max normalization only to non-zero values
+            weights[non_zero_mask] = (non_zero_values - min_non_zero) / (max_non_zero - min_non_zero)
         elif weight_type == 'inverse':
             # Avoid division by zero by adding small epsilon
-            weights = 1.0 / (normalized_values + 1e-10)
+            weights[non_zero_mask] = 1.0 / (non_zero_values + 1e-10)
             # Normalize again to [0, 1] range
             if np.max(weights) > 0:
                 weights = weights / np.max(weights)
         elif weight_type == 'power':
             # Default power of 2 for quadratic
-            weights = normalized_values ** 2
+            weights[non_zero_mask] = ((non_zero_values - min_non_zero) / (max_non_zero - min_non_zero)) ** 2
         elif weight_type == 'exp':
             # Scale down to avoid overflow
-            weights = np.exp(normalized_values * 5) - 1
+            weights[non_zero_mask] = np.exp(((non_zero_values - min_non_zero) / (max_non_zero - min_non_zero)) * 5) - 1
             if np.max(weights) > 0:
                 weights = weights / np.max(weights)
         elif weight_type == 'log':
             # Add small value to avoid log(0)
-            weights = np.log1p(normalized_values)
+            weights[non_zero_mask] = np.log1p((non_zero_values - min_non_zero) / (max_non_zero - min_non_zero))
             if np.max(weights) > 0:
                 weights = weights / np.max(weights)
         elif weight_type == 'constant':
@@ -110,21 +119,93 @@ class FlowFilterBase:
         return weights
     
     def _transform_values_to_weights_batch(self, values, weight_type):
-        # TODO: This is different from the sequential version, check if it's correct.
         """Batch version of weight transformation using MLX."""
+        # Get non-zero values mask for each sample
+        non_zero_mask = values > 0
+        
+        # Initialize weights array
+        weights = mx.zeros_like(values)
+        
         if weight_type == 'linear':
-            weights = values / mx.max(values)
+            # Compute min and max for each sample in the batch
+            # Reshape to (batch_size, -1) to find min/max per sample
+            flat_values = values.reshape(values.shape[0], -1)
+            flat_mask = non_zero_mask.reshape(values.shape[0], -1)
+            
+            # Create a masked array where non-zero values are kept, others are set to inf/-inf
+            masked_values = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('inf')))
+            masked_values_neg = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('-inf')))
+            
+            # Get min and max per sample
+            min_non_zero = mx.min(masked_values, axis=1, keepdims=True)
+            max_non_zero = mx.max(masked_values_neg, axis=1, keepdims=True)
+            
+            # Reshape back to original shape for broadcasting
+            min_non_zero = min_non_zero.reshape(values.shape[0], 1, 1)
+            max_non_zero = max_non_zero.reshape(values.shape[0], 1, 1)
+            
+            # Apply min-max normalization only to non-zero values
+            normalized = (values - min_non_zero) / (max_non_zero - min_non_zero)
+            weights = mx.where(non_zero_mask, normalized, weights)
+            
         elif weight_type == 'inverse':
-            weights = 1.0 / (values + 1e-10)
-            weights = weights / mx.max(weights)
+            # Apply inverse directly to original values (like sequential version)
+            weights = mx.where(non_zero_mask, 1.0 / (values + 1e-10), weights)
+            # Normalize to [0, 1] range
+            max_weights = mx.max(weights, axis=(1,2), keepdims=True)
+            weights = mx.where(max_weights > 0, weights / max_weights, weights)
+            
         elif weight_type == 'power':
-            weights = values ** 2
+            # First normalize like linear
+            flat_values = values.reshape(values.shape[0], -1)
+            flat_mask = non_zero_mask.reshape(values.shape[0], -1)
+            masked_values = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('inf')))
+            masked_values_neg = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('-inf')))
+            min_non_zero = mx.min(masked_values, axis=1, keepdims=True)
+            max_non_zero = mx.max(masked_values_neg, axis=1, keepdims=True)
+            min_non_zero = min_non_zero.reshape(values.shape[0], 1, 1)
+            max_non_zero = max_non_zero.reshape(values.shape[0], 1, 1)
+            normalized = (values - min_non_zero) / (max_non_zero - min_non_zero)
+            
+            # Then apply power
+            weights = mx.where(non_zero_mask, normalized ** 2, weights)
+            
         elif weight_type == 'exp':
-            weights = mx.exp(values * 5) - 1
-            weights = weights / mx.max(weights)
+            # First normalize like linear
+            flat_values = values.reshape(values.shape[0], -1)
+            flat_mask = non_zero_mask.reshape(values.shape[0], -1)
+            masked_values = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('inf')))
+            masked_values_neg = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('-inf')))
+            min_non_zero = mx.min(masked_values, axis=1, keepdims=True)
+            max_non_zero = mx.max(masked_values_neg, axis=1, keepdims=True)
+            min_non_zero = min_non_zero.reshape(values.shape[0], 1, 1)
+            max_non_zero = max_non_zero.reshape(values.shape[0], 1, 1)
+            normalized = (values - min_non_zero) / (max_non_zero - min_non_zero)
+            
+            # Then apply exp
+            weights = mx.where(non_zero_mask, mx.exp(normalized * 5) - 1, weights)
+            # Normalize to [0, 1] range
+            max_weights = mx.max(weights, axis=(1,2), keepdims=True)
+            weights = mx.where(max_weights > 0, weights / max_weights, weights)
+            
         elif weight_type == 'log':
-            weights = mx.log1p(values)
-            weights = weights / mx.max(weights)
+            # First normalize like linear
+            flat_values = values.reshape(values.shape[0], -1)
+            flat_mask = non_zero_mask.reshape(values.shape[0], -1)
+            masked_values = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('inf')))
+            masked_values_neg = mx.where(flat_mask, flat_values, mx.full(flat_values.shape, float('-inf')))
+            min_non_zero = mx.min(masked_values, axis=1, keepdims=True)
+            max_non_zero = mx.max(masked_values_neg, axis=1, keepdims=True)
+            min_non_zero = min_non_zero.reshape(values.shape[0], 1, 1)
+            max_non_zero = max_non_zero.reshape(values.shape[0], 1, 1)
+            normalized = (values - min_non_zero) / (max_non_zero - min_non_zero)
+            
+            # Then apply log
+            weights = mx.where(non_zero_mask, mx.log1p(normalized), weights)
+            # Normalize to [0, 1] range
+            max_weights = mx.max(weights, axis=(1,2), keepdims=True)
+            weights = mx.where(max_weights > 0, weights / max_weights, weights)
+            
         elif weight_type == 'constant':
             weights = mx.ones_like(values)
         else:

@@ -138,17 +138,28 @@ def load_flows(video_index: int, use_compressed: bool = False, verbose: bool = T
                 if verbose:
                     print(f"✅ Flows chargés depuis NPZ: {flows.shape} ({flows.dtype})")
         else:
-            flows = np.load(flow_file)
-            if verbose:
-                print(f"✅ Flows chargés depuis NPY: {flows.shape} ({flows.dtype})")
+            # For .npy files, use memory mapping if we're only loading a subset
+            if start_frame is not None or end_frame is not None:
+                # Use memory mapping for efficient partial loading
+                flows_mmap = np.load(flow_file, mmap_mode='r')
+                if verbose:
+                    print(f"✅ Flows mappés depuis NPY: {flows_mmap.shape} ({flows_mmap.dtype})")
+                
+                # Calculate frame range
+                start = start_frame if start_frame is not None else 0
+                end = end_frame if end_frame is not None else len(flows_mmap) - 1
+                
+                # Load only the requested frames into memory
+                flows = flows_mmap[start:end+1].copy()
+                if verbose:
+                    print(f"   🎯 Frames {start} à {end} ({end-start+1} frames) - mémoire optimisée")
+            else:
+                # Load full file (original behavior)
+                flows = np.load(flow_file)
+                if verbose:
+                    print(f"✅ Flows chargés depuis NPY: {flows.shape} ({flows.dtype})")
         
-        # Gestion des plages de frames
-        if start_frame is not None or end_frame is not None:
-            start = start_frame if start_frame is not None else 0
-            end = end_frame if end_frame is not None else len(flows) - 1
-            flows = flows[start:end+1]
-            if verbose:
-                print(f"   🎯 Frames {start} à {end} ({end-start+1} frames)")
+        # Frame range handling is now done above for .npy files
         
         # Conversion MLX si demandée
         if return_mlx:

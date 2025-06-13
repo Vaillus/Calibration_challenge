@@ -33,6 +33,7 @@ import numpy.typing as npt
 from src.utilities.ground_truth import get_frame_pixel
 from src.utilities.paths import get_labeled_dir, get_flows_dir
 from src.utilities.load_video_frame import read_frame_rgb
+from src.core.flow_filter import FlowFilterSample
 
 
 def compute_colinearity_for_points(
@@ -123,7 +124,8 @@ def plot_colinearity_on_frame(
     stride: int = 2,
     min_flow_magnitude: float = 13.0,
     figsize: Tuple[int, int] = (15, 10),
-    save_path: Optional[Union[str, Path]] = None
+    save_path: Optional[Union[str, Path]] = None,
+    display_img: bool = True
 ) -> None:
     """
     Visualize colinearity scores overlaid on a video frame.
@@ -134,9 +136,10 @@ def plot_colinearity_on_frame(
         video_idx: Index of the video
         ref_point: Reference point (x, y) for colinearity computation
         stride: Spacing between points (higher = fewer points)
-        min_flow_magnitude: Minimum flow magnitude to consider
+        min_flow_magnitude: Minimum flow magnitude to consider (used for flow filtering)
         figsize: Size of the figure (width, height)
         save_path: If provided, save the plot to this path
+        display_img: Whether to display the original frame as background
     """
     # Load the original frame for background
     video_path = get_labeled_dir() / f'{video_idx}.hevc'
@@ -150,17 +153,30 @@ def plot_colinearity_on_frame(
     gt_pixels = get_frame_pixel(video_idx, frame_idx)
     center_pixel = (frame_rgb.shape[1] // 2, frame_rgb.shape[0] // 2)
     
+    # Configure and apply flow filtering using FlowFilterSample
+    filter_config = {
+        'filtering': {
+            'norm': {
+                'is_used': True,
+                'min_threshold': min_flow_magnitude
+            }
+        }
+    }
+    
+    flow_filter = FlowFilterSample(filter_config)
+    filtered_flow = flow_filter.filter(flow)
+    
     # Create grid for points
-    h, w = flow.shape[:2]
+    h, w = filtered_flow.shape[:2]
     y, x = np.mgrid[0:h:stride, 0:w:stride].reshape(2, -1)
     
     # Get flow vectors at grid points
-    fx = flow[y, x, 0]
-    fy = flow[y, x, 1]
+    fx = filtered_flow[y, x, 0]
+    fy = filtered_flow[y, x, 1]
     
-    # Filter out zero or near-zero flow values
+    # Filter out zero flow values (these are the ones that were filtered out)
     magnitude = np.sqrt(fx**2 + fy**2)
-    mask = magnitude > min_flow_magnitude
+    mask = magnitude > 0  # Only non-zero flow vectors remain after filtering
     
     # Compute colinearity for valid flow vectors
     colinearity = compute_colinearity_for_points(
@@ -175,8 +191,15 @@ def plot_colinearity_on_frame(
     plt.figure(figsize=figsize)
     
     # Plot original frame with full opacity
-    plt.imshow(frame_rgb, alpha=1.0)
-    
+    if display_img:
+        plt.imshow(frame_rgb, alpha=1.0)
+    else:
+        # Set limits first, then invert y-axis to match image coordinate system
+        plt.xlim(0, frame_rgb.shape[1])  # Use actual frame width
+        plt.ylim(0, frame_rgb.shape[0])  # Use actual frame height
+        ax = plt.gca()
+        ax.invert_yaxis()  # Invert y-axis to match image coordinate system
+        
     # Plot colinearity scores with smaller, more transparent points
     scatter = plt.scatter(
         x[mask],
@@ -253,8 +276,8 @@ def print_colinearity_stats(colinearity: npt.NDArray[np.float64], prefix: str = 
 
 if __name__ == "__main__":
     # Example usage with a video frame:
-    video_idx = 4
-    frame_idx = 248
+    video_idx = 1
+    frame_idx = 201
     
     # Load flows
     flow_file = get_flows_dir() / f'{video_idx}.npy'
@@ -270,4 +293,4 @@ if __name__ == "__main__":
     ref_point = (gt_pixels[0], gt_pixels[1])  # Using ground truth as reference
     
     # Visualize colinearity scores
-    plot_colinearity_on_frame(flow, frame_idx, video_idx, ref_point, min_flow_magnitude=13)
+    plot_colinearity_on_frame(flow, frame_idx, video_idx, ref_point, min_flow_magnitude=13, display_img= False)

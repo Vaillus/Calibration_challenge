@@ -39,6 +39,7 @@ class CollinearityScorer:
         Returns:
             float: Collinearity score between -1 and 1
         """
+        # Get colinearity map using the dedicated method
         colinearity_map = self.compute_colinearity_map(flow, pt, step)
 
         # Calculate the average score (ignore pixels that don't have flow)

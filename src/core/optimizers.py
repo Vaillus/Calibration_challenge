@@ -145,16 +145,23 @@ class LBFGSOptimizer(BaseOptimizer):
     def __init__(
         self, 
         max_iter: int = 100,
-        display_warnings: bool = False
+        display_warnings: bool = False,
+        ftol: float = 1e-9,  # Tolérance sur la fonction (plus petit = plus d'itérations)
+        gtol: float = 1e-7   # Tolérance sur le gradient (plus petit = plus d'itérations)
     ):
         """
         Args:
             max_iter: Maximum iterations for L-BFGS-B
             display_warnings: Whether to display scipy optimization warnings
+            ftol: Tolerance for function value changes (default scipy: 2.220446049250313e-09)
+            gtol: Tolerance for gradient norm (default scipy: 1e-05)
+                  Smaller values = more iterations before stopping
         """
         super().__init__()
         self.max_iter = max_iter
         self.display_warnings = display_warnings
+        self.ftol = ftol
+        self.gtol = gtol
         # We use the numpy version of the estimator because the function scipy.optimize.minimize does not support mx.array
         self.estimator = CollinearityScorer()
     
@@ -163,17 +170,18 @@ class LBFGSOptimizer(BaseOptimizer):
             flow: np.ndarray, 
             starting_point: Optional[np.ndarray] = None,
             weights: Optional[np.ndarray] = None,
-            visualize: Optional[bool] = False,
+            save_trajectories: bool = False,
+            visualize: bool = False,
             ground_truth_point: Optional[Tuple[float, float]] = None
         ) -> Tuple[float, float]:
         """
         Optimise un seul échantillon avec L-BFGS-B.
         
         Args:
-            estimator: Instance de VanishingPointEstimator (version numpy)
             flow: Flux optique (h, w, 2)
             starting_point: Point de départ [x, y]
             weights: Poids optionnels (h, w)
+            save_trajectories: Whether to save optimization trajectory
             visualize: Whether to visualize the optimization process
             ground_truth_point: Optional ground truth point for visualization
             
@@ -183,18 +191,23 @@ class LBFGSOptimizer(BaseOptimizer):
         if starting_point is None:
             starting_point = np.array([flow.shape[1] // 2, flow.shape[0] // 2])
         
+        # If visualize is True, save_trajectories must also be True
+        if visualize:
+            save_trajectories = True
+        
         # Check for valid pixels
         valid_pixels = (flow[:,:,0]**2 + flow[:,:,1]**2) > 0
         if np.sum(valid_pixels) == 0:
             return tuple(starting_point)
         
-        # Reset visualization data
-        self.trajectory = [starting_point]
-        self.scores = [self.estimator.objective_function(starting_point, flow, weights)]
+        # Reset visualization data if needed
+        if save_trajectories:
+            self.trajectory = [starting_point]
+            self.scores = [self.estimator.objective_function(starting_point, flow, weights)]
         
-        # Create callback if visualization is enabled
+        # Create callback if trajectory saving is enabled
         callback_fn = None
-        if visualize:
+        if save_trajectories:
             def callback(point):
                 self.trajectory.append(point.copy())
                 self.scores.append(self.estimator.objective_function(point, flow, weights))
@@ -208,7 +221,9 @@ class LBFGSOptimizer(BaseOptimizer):
             callback=callback_fn,
             options={
                 'disp': self.display_warnings,
-                'maxiter': self.max_iter
+                'maxiter': self.max_iter,
+                'ftol': self.ftol,
+                'gtol': self.gtol
             }
         )
         
@@ -266,9 +281,10 @@ class AdamOptimizer(BaseOptimizer):
                  beta1: float = 0.6, 
                  beta2: float = 0.98,
                  eps: float = 1e-8,
-                 max_iter: int = 50,
-                 plateau_threshold: float = 1e-4,
-                 plateau_patience: int = 3):
+                 max_iter: int = 100,
+                 plateau_threshold: float = 0,
+                 plateau_patience: int = 3,
+                 pixel_patience: int = 5):  # Nouveau critère d'arrêt
         """
         Args:
             lr: Learning rate (optimisé pour les points de fuite)
@@ -278,6 +294,8 @@ class AdamOptimizer(BaseOptimizer):
             max_iter: Maximum iterations per optimization
             plateau_threshold: Minimum improvement to continue (1e-4 optimal)
             plateau_patience: Iterations to check for improvement (3 optimal)
+            pixel_patience: Stop if staying on same rounded pixel for this many iterations
+                           (0 = disabled, >0 = enabled as alternative to plateau detection)
         """
         super().__init__()
         self.lr = lr
@@ -287,12 +305,14 @@ class AdamOptimizer(BaseOptimizer):
         self.max_iter = max_iter
         self.plateau_threshold = plateau_threshold
         self.plateau_patience = plateau_patience
+        self.pixel_patience = pixel_patience
         self.estimator = BatchCollinearityScorer()
     
     def optimize_single(
         self, 
         single_flow: mx.array, 
         starting_point: mx.array,
+        save_trajectories: bool = False,
         visualize: bool = False, 
         ground_truth_point: Optional[Tuple[float, float]] = None
     ) -> mx.array:
@@ -300,15 +320,19 @@ class AdamOptimizer(BaseOptimizer):
         Optimise un seul échantillon avec Adam.
         
         Args:
-            estimator: Instance de ParallelVanishingPointEstimator
             single_flow: Flux optique unique de forme (h, w, 2)
             starting_point: Point de départ [x, y]
+            save_trajectories: Whether to save optimization trajectory
             visualize: Whether to visualize the optimization process
             ground_truth_point: Optional ground truth point for visualization
             
         Returns:
             Point de fuite optimisé [x, y]
         """
+        # If visualize is True, save_trajectories must also be True
+        if visualize:
+            save_trajectories = True
+            
         x = starting_point
         m = mx.zeros_like(x)  # momentum
         v = mx.zeros_like(x)  # variance
@@ -316,12 +340,18 @@ class AdamOptimizer(BaseOptimizer):
         # Force evaluation of initial state
         mx.eval(x, m, v)
         
-        # Reset visualization data
-        self.trajectory = [np.array(x)]
-        self.scores = [float(-self.estimator.colin_score(single_flow, x))]
+        # Reset visualization data if needed
+        if save_trajectories:
+            self.trajectory = [np.array(x)]
+            self.scores = [float(-self.estimator.colin_score(single_flow, x))]
         
         # Plateau detection - store recent scores efficiently
         recent_scores = []
+        
+        # Pixel stationarity detection - track rounded pixel position
+        if self.pixel_patience > 0:
+            current_pixel = (int(round(float(x[0]))), int(round(float(x[1]))))
+            same_pixel_count = 1
         
         for t in range(1, self.max_iter + 1):
             # Loss function for single sample - returns scalar
@@ -344,13 +374,24 @@ class AdamOptimizer(BaseOptimizer):
             x = x - self.lr * m_hat / (mx.sqrt(v_hat) + self.eps)
             mx.eval(x)
             
-            # Store trajectory and score for visualization
-            if visualize:
+            # Store trajectory and score if trajectory saving is enabled
+            if save_trajectories:
                 self.trajectory.append(np.array(x))
                 self.scores.append(float(-single_loss(x)))
             
-            # Efficient plateau detection
-            if self.plateau_threshold > 0 and t >= 5:
+            # Pixel stationarity detection (prioritaire sur plateau detection)
+            if self.pixel_patience > 0:
+                new_pixel = (int(round(float(x[0]))), int(round(float(x[1]))))
+                if new_pixel == current_pixel:
+                    same_pixel_count += 1
+                    if same_pixel_count >= self.pixel_patience:
+                        break  # Arrêt car resté sur le même pixel trop longtemps
+                else:
+                    current_pixel = new_pixel
+                    same_pixel_count = 1
+            
+            # Efficient plateau detection (seulement si pixel detection désactivée)
+            elif self.plateau_threshold > 0 and t >= 5:
                 current_score = float(-single_loss(x))
                 recent_scores.append(current_score)
                 

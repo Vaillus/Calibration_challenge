@@ -3,9 +3,9 @@
 Visualisation des distributions des optimiseurs.
 
 Ce script compare les performances et distributions spatiales de différents optimiseurs :
-1. Adam AVEC détection de plateau (plateau_threshold=1e-4, plateau_patience=3)
-2. Adam SANS détection de plateau (plateau_threshold=0, max_iter utilisé entièrement)
-3. L-BFGS-B (optimiseur de référence)
+1. L-BFGS-B (optimiseur de référence avec paramètres par défaut)
+2. Adam AVEC détection de plateau (plateau_threshold=1e-4, plateau_patience=3)
+3. Adam AVEC détection de pixel patience (pixel_patience=5, plateau_threshold=0)
 
 Le script génère :
 - Des visualisations des distributions spatiales des prédictions
@@ -152,41 +152,42 @@ def test_adam_with_plateau(flows_data, labels_data):
     return results
 
 
-def test_adam_without_plateau(flows_data, labels_data):
+def test_adam_with_pixel_patience(flows_data, labels_data):
     """
-    Test Adam SANS détection de plateau.
+    Test Adam AVEC détection de pixel patience.
     
     Returns:
         dict: Résultats du test
     """
-    print("\n🔄 TEST 2: Adam SANS détection de plateau")
+    print("\n🔄 TEST 2: Adam AVEC détection de pixel patience")
     print("-" * 50)
     
-    # Optimiseur sans plateau (plateau_threshold=0 désactive la détection)
-    adam_no_plateau = AdamOptimizer(
+    # Optimiseur avec pixel patience (pixel_patience=5 active la détection)
+    adam_pixel_patience = AdamOptimizer(
         lr=10.0,
         beta1=0.6,
         beta2=0.98,
         eps=1e-8,
         max_iter=50,
-        plateau_threshold=0.0,  # SANS détection (désactivé)
-        plateau_patience=3  # Pas utilisé si threshold=0
+        plateau_threshold=0.0,  # Désactivé car on utilise pixel_patience
+        plateau_patience=3,
+        pixel_patience=5  # AVEC détection de pixel patience
     )
     
     # Optimisation
     start_time = time.time()
-    predictions_no_plateau = adam_no_plateau.optimize_batch(flows_data)
-    mx.eval(predictions_no_plateau)
+    predictions_pixel_patience = adam_pixel_patience.optimize_batch(flows_data)
+    mx.eval(predictions_pixel_patience)
     optimization_time = time.time() - start_time
     
     # Calcul des métriques
-    distances = mx.sqrt(mx.sum(mx.square(predictions_no_plateau - labels_data), axis=1))
+    distances = mx.sqrt(mx.sum(mx.square(predictions_pixel_patience - labels_data), axis=1))
     mx.eval(distances)
     distances_np = np.array(distances)
     
     results = {
-        'name': 'Adam SANS plateau',
-        'predictions': np.array(predictions_no_plateau),
+        'name': 'Adam AVEC pixel patience',
+        'predictions': np.array(predictions_pixel_patience),
         'distances': distances_np,
         'optimization_time': optimization_time,
         'mean_distance': float(mx.mean(distances)),
@@ -197,6 +198,7 @@ def test_adam_without_plateau(flows_data, labels_data):
         'config': {
             'plateau_threshold': 0.0,
             'plateau_patience': 3,
+            'pixel_patience': 5,
             'max_iter': 50
         }
     }
@@ -266,60 +268,60 @@ def test_lbfgs_optimizer(flows_data, labels_data):
     return results
 
 
-def compare_results(results_with, results_without, results_lbfgs):
+def compare_results(results_lbfgs, results_plateau, results_pixel):
     """
     Compare et affiche les résultats des trois tests.
     
     Args:
-        results_with: Résultats Adam avec détection de plateau
-        results_without: Résultats Adam sans détection de plateau
         results_lbfgs: Résultats L-BFGS-B
+        results_plateau: Résultats Adam avec détection de plateau
+        results_pixel: Résultats Adam avec détection de pixel patience
     """
     print("\n" + "="*90)
     print("COMPARAISON DÉTAILLÉE DES TROIS OPTIMISEURS")
     print("="*90)
     
     # Table de comparaison étendue
-    print(f"{'Métrique':<25} {'Adam+plateau':<15} {'Adam-plateau':<15} {'L-BFGS-B':<15} {'Meilleur':<15}")
-    print("-" * 90)
+    print(f"{'Métrique':<25} {'L-BFGS-B':<18} {'Adam+plateau':<18} {'Adam+pixel':<18} {'Meilleur':<15}")
+    print("-" * 95)
     
-    all_results = [results_with, results_without, results_lbfgs]
-    names = ['Adam+plateau', 'Adam-plateau', 'L-BFGS-B']
+    all_results = [results_lbfgs, results_plateau, results_pixel]
+    names = ['L-BFGS-B', 'Adam+plateau', 'Adam+pixel']
     
     # Temps d'optimisation (plus bas = mieux)
     times = [r['optimization_time'] for r in all_results]
     best_time_idx = np.argmin(times)
-    print(f"{'Temps (s)':<25} {times[0]:<15.2f} {times[1]:<15.2f} {times[2]:<15.2f} {names[best_time_idx]:<15}")
+    print(f"{'Temps (s)':<25} {times[0]:<18.2f} {times[1]:<18.2f} {times[2]:<18.2f} {names[best_time_idx]:<15}")
     
     # Distance moyenne (plus bas = mieux)
     means = [r['mean_distance'] for r in all_results]
     best_mean_idx = np.argmin(means)
-    print(f"{'Distance moyenne (px)':<25} {means[0]:<15.2f} {means[1]:<15.2f} {means[2]:<15.2f} {names[best_mean_idx]:<15}")
+    print(f"{'Distance moyenne (px)':<25} {means[0]:<18.2f} {means[1]:<18.2f} {means[2]:<18.2f} {names[best_mean_idx]:<15}")
     
     # Distance médiane (plus bas = mieux)
     medians = [r['median_distance'] for r in all_results]
     best_median_idx = np.argmin(medians)
-    print(f"{'Distance médiane (px)':<25} {medians[0]:<15.2f} {medians[1]:<15.2f} {medians[2]:<15.2f} {names[best_median_idx]:<15}")
+    print(f"{'Distance médiane (px)':<25} {medians[0]:<18.2f} {medians[1]:<18.2f} {medians[2]:<18.2f} {names[best_median_idx]:<15}")
     
     # Distance minimum (plus bas = mieux)
     mins = [r['min_distance'] for r in all_results]
     best_min_idx = np.argmin(mins)
-    print(f"{'Distance min (px)':<25} {mins[0]:<15.2f} {mins[1]:<15.2f} {mins[2]:<15.2f} {names[best_min_idx]:<15}")
+    print(f"{'Distance min (px)':<25} {mins[0]:<18.2f} {mins[1]:<18.2f} {mins[2]:<18.2f} {names[best_min_idx]:<15}")
     
     # Distance maximum (plus bas = mieux)
     maxs = [r['max_distance'] for r in all_results]
     best_max_idx = np.argmin(maxs)
-    print(f"{'Distance max (px)':<25} {maxs[0]:<15.2f} {maxs[1]:<15.2f} {maxs[2]:<15.2f} {names[best_max_idx]:<15}")
+    print(f"{'Distance max (px)':<25} {maxs[0]:<18.2f} {maxs[1]:<18.2f} {maxs[2]:<18.2f} {names[best_max_idx]:<15}")
     
     # Écart-type (plus bas = mieux)
     stds = [r['std_distance'] for r in all_results]
     best_std_idx = np.argmin(stds)
-    print(f"{'Écart-type (px)':<25} {stds[0]:<15.2f} {stds[1]:<15.2f} {stds[2]:<15.2f} {names[best_std_idx]:<15}")
+    print(f"{'Écart-type (px)':<25} {stds[0]:<18.2f} {stds[1]:<18.2f} {stds[2]:<18.2f} {names[best_std_idx]:<15}")
     
     # Performance (frames/seconde) (plus haut = mieux)
     fps = [50 / t for t in times]
     best_fps_idx = np.argmax(fps)
-    print(f"{'Performance (fps)':<25} {fps[0]:<15.1f} {fps[1]:<15.1f} {fps[2]:<15.1f} {names[best_fps_idx]:<15}")
+    print(f"{'Performance (fps)':<25} {fps[0]:<18.1f} {fps[1]:<18.1f} {fps[2]:<18.1f} {names[best_fps_idx]:<15}")
     
     print()
     
@@ -347,19 +349,19 @@ def compare_results(results_with, results_without, results_lbfgs):
     print(f"\n📈 ANALYSE DÉTAILLÉE")
     print("-" * 25)
     
-    # Comparaison Adam avec/sans plateau
-    time_improvement = (times[1] - times[0]) / times[1] * 100
-    mean_improvement = (means[1] - means[0]) / means[1] * 100
+    # Comparaison Adam plateau vs pixel patience
+    time_improvement = (times[1] - times[2]) / times[1] * 100
+    mean_improvement = (means[1] - means[2]) / means[1] * 100
     
-    print(f"Adam plateau vs Adam normal:")
-    print(f"   ⏱️  Temps: {time_improvement:+.1f}% ({'✅ plus rapide' if time_improvement > 0 else '❌ plus lent'})")
-    print(f"   🎯 Précision: {mean_improvement:+.1f}% ({'✅ plus précis' if mean_improvement > 0 else '❌ moins précis'})")
+    print(f"Adam plateau patience vs Adam pixel patience:")
+    print(f"   ⏱️  Temps: {time_improvement:+.1f}% ({'✅ pixel patience plus rapide' if time_improvement > 0 else '❌ plateau patience plus rapide'})")
+    print(f"   🎯 Précision: {mean_improvement:+.1f}% ({'✅ pixel patience plus précis' if mean_improvement > 0 else '❌ plateau patience plus précis'})")
     
     # Comparaison avec L-BFGS-B
-    lbfgs_vs_best_adam = 0 if means[0] < means[2] else 1
-    best_adam_name = names[lbfgs_vs_best_adam]
-    precision_diff = (means[2] - means[lbfgs_vs_best_adam]) / means[2] * 100
-    time_diff = (times[2] - times[lbfgs_vs_best_adam]) / times[2] * 100
+    best_adam_idx = 1 if means[1] < means[2] else 2
+    best_adam_name = names[best_adam_idx]
+    precision_diff = (means[0] - means[best_adam_idx]) / means[0] * 100
+    time_diff = (times[0] - times[best_adam_idx]) / times[0] * 100
     
     print(f"\nL-BFGS-B vs {best_adam_name}:")
     print(f"   ⏱️  Temps: {time_diff:+.1f}% ({'✅ L-BFGS-B plus rapide' if time_diff > 0 else '❌ Adam plus rapide'})")
@@ -368,11 +370,11 @@ def compare_results(results_with, results_without, results_lbfgs):
     # Recommandation finale
     print(f"\n🎯 RECOMMANDATIONS:")
     if winner_idx == 0:
-        print("   ✅ UTILISER Adam avec détection de plateau (meilleur équilibre)")
-    elif winner_idx == 1:
-        print("   ✅ UTILISER Adam sans détection de plateau (plus d'itérations payantes)")
-    else:
         print("   ✅ UTILISER L-BFGS-B (précision maximale)")
+    elif winner_idx == 1:
+        print("   ✅ UTILISER Adam avec détection de plateau (meilleur équilibre)")
+    else:
+        print("   ✅ UTILISER Adam avec détection de pixel patience (convergence rapide)")
         
     print(f"   📋 Pour la vitesse: {names[best_time_idx]}")
     print(f"   📋 Pour la précision: {names[best_mean_idx]}")
@@ -383,9 +385,9 @@ def create_legends():
     """Crée les légendes pour les couleurs et les symboles."""
     color_legend = [
         Line2D([0], [0], color='black', label='Ground Truth'),
-        Line2D([0], [0], color='blue', label='Adam+plateau'),
-        Line2D([0], [0], color='red', label='Adam-plateau'),
         Line2D([0], [0], color='green', label='L-BFGS-B'),
+        Line2D([0], [0], color='blue', label='Adam+plateau'),
+        Line2D([0], [0], color='red', label='Adam+pixel'),
         Line2D([0], [0], color='gray', label='Centre frame')
     ]
 
@@ -444,27 +446,27 @@ def plot_distribution_on_axis(ax, pixels, color, label, alpha_points=0.3, show_f
     return mean_point, median_point, std_point
 
 
-def visualize_comparison(results_with, results_without, results_lbfgs, labels_data):
+def visualize_comparison(results_lbfgs, results_plateau, results_pixel, labels_data):
     """
     Visualise la comparaison des résultats avec distribution des points.
     
     Args:
-        results_with: Résultats Adam avec détection de plateau
-        results_without: Résultats Adam sans détection de plateau
         results_lbfgs: Résultats L-BFGS-B
+        results_plateau: Résultats Adam avec détection de plateau
+        results_pixel: Résultats Adam avec détection de pixel patience
         labels_data: Labels ground truth
     """
     print("\n🔄 Génération des visualisations comparatives...")
     
     # Préparer les données
     labels_np = np.array(labels_data)
-    predictions_with = results_with['predictions']
-    predictions_without = results_without['predictions']
     predictions_lbfgs = results_lbfgs['predictions']
+    predictions_with = results_plateau['predictions']
+    predictions_pixel = results_pixel['predictions']
     
-    distances_with = results_with['distances']
-    distances_without = results_without['distances']
     distances_lbfgs = results_lbfgs['distances']
+    distances_with = results_plateau['distances']
+    distances_pixel = results_pixel['distances']
     
     # Calculer la taille de la frame à partir des données de flows (disponible depuis load_and_filter_data)
     # On utilise la taille standard des flows qu'on avait : (50, 874, 1164, 2)
@@ -476,9 +478,9 @@ def visualize_comparison(results_with, results_without, results_lbfgs, labels_da
     fig.suptitle('Comparaison des distributions de points - Ground Truth vs 3 Optimiseurs (50 frames)', fontsize=16)
     
     # Couleurs pour chaque méthode
-    colors = ['black', 'blue', 'red', 'green']
-    names = ['Ground Truth', 'Adam+plateau', 'Adam-plateau', 'L-BFGS-B']
-    all_predictions = [labels_np, predictions_with, predictions_without, predictions_lbfgs]
+    colors = ['black', 'green', 'blue', 'red']
+    names = ['Ground Truth', 'L-BFGS-B', 'Adam+plateau', 'Adam+pixel']
+    all_predictions = [labels_np, predictions_lbfgs, predictions_with, predictions_pixel]
     
     # Utiliser les limites de la frame (0 à frame_width/frame_height)
     x_min, x_max = 0, frame_width
@@ -511,9 +513,9 @@ def visualize_comparison(results_with, results_without, results_lbfgs, labels_da
     ax_distances = axes[0, 1]
     ax_distances.set_title('Distribution des distances aux labels', fontsize=14)
     
-    distances_all = [distances_with, distances_without, distances_lbfgs]
-    optimizer_names = ['Adam+plateau', 'Adam-plateau', 'L-BFGS-B']
-    optimizer_colors = ['blue', 'red', 'green']
+    distances_all = [distances_lbfgs, distances_with, distances_pixel]
+    optimizer_names = ['L-BFGS-B', 'Adam+plateau', 'Adam+pixel']
+    optimizer_colors = ['green', 'blue', 'red']
     
     for i, (distances, name, color) in enumerate(zip(distances_all, optimizer_names, optimizer_colors)):
         ax_distances.hist(distances, bins=15, alpha=0.6, color=color, label=f'{name} (μ={np.mean(distances):.1f}px)', edgecolor='black')
@@ -536,18 +538,18 @@ def visualize_comparison(results_with, results_without, results_lbfgs, labels_da
     ax_adam_plateau.set_ylabel('Y (pixels)')
     ax_adam_plateau.grid(True, alpha=0.3)
     
-    # 4. Comparaison L-BFGS-B vs Ground Truth
-    ax_lbfgs = axes[1, 1]
-    ax_lbfgs.set_title('L-BFGS-B vs Ground Truth', fontsize=14)
+    # 4. Comparaison Adam+pixel vs Ground Truth
+    ax_adam_pixel = axes[1, 1]
+    ax_adam_pixel.set_title('Adam+pixel vs Ground Truth', fontsize=14)
     
-    plot_distribution_on_axis(ax_lbfgs, labels_np, 'black', 'Ground Truth', 0.5, True, frame_size)
-    plot_distribution_on_axis(ax_lbfgs, predictions_lbfgs, 'green', 'L-BFGS-B', 0.5)
+    plot_distribution_on_axis(ax_adam_pixel, labels_np, 'black', 'Ground Truth', 0.5, True, frame_size)
+    plot_distribution_on_axis(ax_adam_pixel, predictions_pixel, 'red', 'Adam+pixel', 0.5)
     
-    ax_lbfgs.set_xlim(x_min, x_max)
-    ax_lbfgs.set_ylim(y_max, y_min)  # Inverser Y : plus petit en haut, plus grand en bas
-    ax_lbfgs.set_xlabel('X (pixels)')
-    ax_lbfgs.set_ylabel('Y (pixels)')
-    ax_lbfgs.grid(True, alpha=0.3)
+    ax_adam_pixel.set_xlim(x_min, x_max)
+    ax_adam_pixel.set_ylim(y_max, y_min)  # Inverser Y : plus petit en haut, plus grand en bas
+    ax_adam_pixel.set_xlabel('X (pixels)')
+    ax_adam_pixel.set_ylabel('Y (pixels)')
+    ax_adam_pixel.grid(True, alpha=0.3)
     
     plt.tight_layout()
     plt.show()
@@ -578,29 +580,29 @@ def main(video_idx=4, start_frame=250, end_frame=299):
     print("Configuration:")
     print(f"- Dataset: Vidéo {video_idx}, frames {start_frame}-{end_frame} ({end_frame-start_frame+1} échantillons)")
     print("- Filtrage: mean_threshold=13")
-    print("- Test 1: Adam avec plateau (lr=10.0, plateau_threshold=1e-4, plateau_patience=3)")
-    print("- Test 2: Adam sans plateau (lr=10.0, plateau_threshold=0.0)")
-    print("- Test 3: L-BFGS-B (max_iter=100)")
+    print("- Test 1: L-BFGS-B (paramètres par défaut)")
+    print("- Test 2: Adam avec plateau patience (lr=10.0, plateau_threshold=1e-4, plateau_patience=3)")
+    print("- Test 3: Adam avec pixel patience (lr=10.0, pixel_patience=5)")
     print("="*90)
     
     try:
         # Chargement et filtrage des données (une seule fois)
         filtered_flows, labels_data = load_and_filter_data(video_idx, start_frame, end_frame)
         
-        # Test 1: Adam avec détection de plateau
-        results_with_plateau = test_adam_with_plateau(filtered_flows, labels_data)
-        
-        # Test 2: Adam sans détection de plateau
-        results_without_plateau = test_adam_without_plateau(filtered_flows, labels_data)
-        
-        # Test 3: L-BFGS-B
+        # Test 1: L-BFGS-B
         results_lbfgs = test_lbfgs_optimizer(filtered_flows, labels_data)
         
+        # Test 2: Adam avec détection de plateau
+        results_with_plateau = test_adam_with_plateau(filtered_flows, labels_data)
+        
+        # Test 3: Adam avec détection de pixel patience
+        results_with_pixel = test_adam_with_pixel_patience(filtered_flows, labels_data)
+        
         # Comparaison détaillée des trois optimiseurs
-        compare_results(results_with_plateau, results_without_plateau, results_lbfgs)
+        compare_results(results_lbfgs, results_with_plateau, results_with_pixel)
         
         # Visualisations comparatives
-        visualize_comparison(results_with_plateau, results_without_plateau, results_lbfgs, labels_data)
+        visualize_comparison(results_lbfgs, results_with_plateau, results_with_pixel, labels_data)
         
         print("\n" + "="*90)
         print("VISUALISATION TERMINÉE")

@@ -15,7 +15,14 @@ class PixelAngleConverter:
         self.image_width = project_constants["frame_width"]
         self.image_height = project_constants["frame_height"]
     
-    def angles_to_pixels(self, yaw, pitch, focal_length=None, image_width=None, image_height=None):
+    def angles_to_pixels(
+            self, 
+            yaw, 
+            pitch, 
+            focal_length=None, 
+            image_width=None, 
+            image_height=None
+        ):
         """
         Convertit les angles en radians en coordonnées en pixels.
         

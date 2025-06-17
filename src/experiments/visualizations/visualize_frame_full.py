@@ -24,9 +24,8 @@ from src.utilities.ground_truth import get_frame_pixel, read_ground_truth_pixels
 from src.utilities.paths import get_labeled_dir, get_flows_dir, get_pred_dir
 from src.utilities.load_video_frame import read_frame_rgb
 from src.utilities.load_flows import load_flows
-from src.utilities.worst_errors_reader import read_worst_errors
 from src.utilities.load_predictions import load_predictions
-from src.utilities.pixel_angle_converter import angles_to_pixels
+from src.utilities.worst_errors import get_worst_errors_global, select_random_frames_from_7th_decile
 from src.core.flow_filter import FlowFilterBatch, FlowFilterSample
 from src.core.collinearity_scorer_batch import BatchCollinearityScorer
 from src.core.collinearity_scorer_sample import CollinearityScorer
@@ -337,17 +336,18 @@ def visualize_frame_full(video_idx: int = 1, frame_idx: int = 201):
     print("✅ Visualisation terminée")
 
 
-def visualize_worst_errors_sequential(filename: str = "worst_10_global_errors_5.json"):
+def visualize_worst_errors_sequential(run_name="vanilla", k=10):
     """
-    Visualise séquentiellement toutes les frames des pires erreurs.
+    Visualise séquentiellement les k pires erreurs globales.
     
     Args:
-        filename: Nom du fichier JSON contenant les pires erreurs
+        run_name: Nom du run à analyser
+        k: Nombre de pires erreurs à visualiser
     """
-    print(f"🔍 Chargement des pires erreurs depuis {filename}...")
+    print(f"🔍 Récupération des {k} pires erreurs pour le run '{run_name}'...")
     
     try:
-        worst_errors_coords = read_worst_errors(filename)
+        worst_errors_coords = get_worst_errors_global(run_name, k)
         print(f"✅ {len(worst_errors_coords)} pires erreurs trouvées")
         
         for i, (video_id, frame_id) in enumerate(worst_errors_coords):
@@ -365,92 +365,13 @@ def visualize_worst_errors_sequential(filename: str = "worst_10_global_errors_5.
         
         print(f"\n✅ Visualisation de toutes les {len(worst_errors_coords)} pires erreurs terminée")
         
-    except FileNotFoundError:
-        print(f"❌ Fichier {filename} non trouvé")
-        print("Retour à la visualisation par défaut...")
-        visualize_frame_full(video_idx=1, frame_idx=201)
     except Exception as e:
-        print(f"❌ Erreur lors du chargement des pires erreurs: {e}")
+        print(f"❌ Erreur lors de la récupération des pires erreurs: {e}")
         print("Retour à la visualisation par défaut...")
         visualize_frame_full(video_idx=1, frame_idx=201)
 
 
-def select_random_frames_from_7th_decile(run_name="5", n_frames=10):
-    """
-    Sélectionne n frames aléatoires du 7ème décile de la distribution des distances.
-    
-    Args:
-        run_name: Nom du run à analyser
-        n_frames: Nombre de frames à sélectionner
-        
-    Returns:
-        List[Tuple[int, int]]: Liste de (video_id, frame_id)
-    """
-    print(f"🎲 Sélection de {n_frames} frames aléatoires du 7ème décile...")
-    
-    # 1. Calculer toutes les distances avec coordonnées
-    all_distances_with_coords = []
-    
-    for video_id in range(5):
-        # Charger données (même logique que SaveWorstError)
-        gt_path = get_labeled_dir() / f"{video_id}.txt"
-        pred_path = get_pred_dir(run_name) / f"{video_id}.txt"
-        
-        if not gt_path.exists() or not pred_path.exists():
-            continue
-            
-        gt_data = np.loadtxt(gt_path)
-        pred_data = np.loadtxt(pred_path)
-        
-        min_frames = min(len(gt_data), len(pred_data))
-        
-        for i in range(min_frames):
-            if np.isnan(pred_data[i]).any() or np.isnan(gt_data[i]).any():
-                continue
-                
-            # Calculer distance
-            pitch_gt, yaw_gt = gt_data[i]
-            x_gt, y_gt = angles_to_pixels(yaw_gt, pitch_gt, 910, 1920, 1080)
-            
-            pitch_pred, yaw_pred = pred_data[i]
-            x_pred, y_pred = angles_to_pixels(yaw_pred, pitch_pred, 910, 1920, 1080)
-            
-            distance = np.sqrt((x_gt - x_pred)**2 + (y_gt - y_pred)**2)
-            
-            all_distances_with_coords.append((distance, video_id, i))
-    
-    if not all_distances_with_coords:
-        print("❌ Aucune distance calculée!")
-        return []
-    
-    # 2. Calculer les percentiles
-    distances = [d[0] for d in all_distances_with_coords]
-    p70 = np.percentile(distances, 70)  # 7ème décile début
-    p80 = np.percentile(distances, 80)  # 7ème décile fin
-    
-    print(f"📊 7ème décile: {p70:.1f} - {p80:.1f} pixels")
-    
-    # 3. Filtrer les frames dans le 7ème décile
-    frames_in_7th_decile = [
-        (video_id, frame_id) 
-        for dist, video_id, frame_id in all_distances_with_coords
-        if p70 <= dist <= p80
-    ]
-    
-    print(f"🎯 {len(frames_in_7th_decile)} frames dans le 7ème décile")
-    
-    if len(frames_in_7th_decile) < n_frames:
-        print(f"⚠️  Seulement {len(frames_in_7th_decile)} frames disponibles")
-        return frames_in_7th_decile
-    
-    # 4. Sélectionner aléatoirement
-    selected_frames = random.sample(frames_in_7th_decile, n_frames)
-    
-    print(f"✅ {n_frames} frames sélectionnés aléatoirement:")
-    for i, (vid, frame) in enumerate(selected_frames, 1):
-        print(f"   {i}. Video {vid}, Frame {frame}")
-    
-    return selected_frames
+
 
 def visualize_random_7th_decile_frames(run_name="5"):
     """Visualise 10 frames aléatoires du 7ème décile."""
@@ -488,7 +409,15 @@ def main():
     
     if choice == "2":
         # Visualiser les pires erreurs
-        visualize_worst_errors_sequential()
+        run_name = input("Nom du run (défaut: 'vanilla'): ").strip()
+        if not run_name:
+            run_name = "vanilla"
+        k_input = input("Nombre de pires erreurs (défaut: 10): ").strip()
+        try:
+            k = int(k_input) if k_input else 10
+        except ValueError:
+            k = 10
+        visualize_worst_errors_sequential(run_name, k)
     elif choice == "3":
         run_name = input("Nom du run (défaut: '5'): ").strip()
         if not run_name:

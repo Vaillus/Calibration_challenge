@@ -236,7 +236,7 @@ class LBFGSOptimizer(BaseOptimizer):
         return final_point
     
     def optimize_batch(self, flow_batch: np.ndarray, 
-                      starting_points: np.ndarray,
+                      starting_points: Optional[np.ndarray] = None,
                       weights_batch: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Optimisation séquentielle d'un batch avec L-BFGS-B.
@@ -244,13 +244,21 @@ class LBFGSOptimizer(BaseOptimizer):
         Args:
             estimator: Instance de VanishingPointEstimator
             flow_batch: Batch de flux optiques (batch_size, h, w, 2)
-            starting_points: Points de départ (batch_size, 2)
+            starting_points: Points de départ optionnels (batch_size, 2)
             weights_batch: Poids optionnels (batch_size, h, w)
             
         Returns:
             Points de fuite optimisés (batch_size, 2)
         """
         batch_size = flow_batch.shape[0]
+        
+        # Initialize starting points at image center if not provided
+        if starting_points is None:
+            center_x = flow_batch.shape[2] // 2
+            center_y = flow_batch.shape[1] // 2
+            center_point = np.array([center_x, center_y])
+            starting_points = np.tile(center_point, (batch_size, 1))
+        
         final_points = []
         
         for i in range(batch_size):
@@ -311,7 +319,8 @@ class AdamOptimizer(BaseOptimizer):
     def optimize_single(
         self, 
         single_flow: mx.array, 
-        starting_point: mx.array,
+        starting_point: Optional[mx.array] = None,
+        weights: Optional[mx.array] = None,
         save_trajectories: bool = False,
         visualize: bool = False, 
         ground_truth_point: Optional[Tuple[float, float]] = None
@@ -322,6 +331,7 @@ class AdamOptimizer(BaseOptimizer):
         Args:
             single_flow: Flux optique unique de forme (h, w, 2)
             starting_point: Point de départ [x, y]
+            weights: Poids optionnels (h, w)
             save_trajectories: Whether to save optimization trajectory
             visualize: Whether to visualize the optimization process
             ground_truth_point: Optional ground truth point for visualization
@@ -332,6 +342,10 @@ class AdamOptimizer(BaseOptimizer):
         # If visualize is True, save_trajectories must also be True
         if visualize:
             save_trajectories = True
+
+        # If starting point is not provided, use the center of the image
+        if starting_point is None:
+            starting_point = mx.array([single_flow.shape[1] // 2, single_flow.shape[0] // 2])
             
         x = starting_point
         m = mx.zeros_like(x)  # momentum
@@ -343,7 +357,7 @@ class AdamOptimizer(BaseOptimizer):
         # Reset visualization data if needed
         if save_trajectories:
             self.trajectory = [np.array(x)]
-            self.scores = [float(-self.estimator.colin_score(single_flow, x))]
+            self.scores = [float(-self.estimator.colin_score(single_flow, x, weights))]
         
         # Plateau detection - store recent scores efficiently
         recent_scores = []
@@ -356,7 +370,7 @@ class AdamOptimizer(BaseOptimizer):
         for t in range(1, self.max_iter + 1):
             # Loss function for single sample - returns scalar
             def single_loss(point):
-                score = self.estimator.colin_score(single_flow, point)
+                score = self.estimator.colin_score(single_flow, point, weights)
                 return -score  # Negative because we want to maximize score
             
             # Compute gradient
@@ -415,7 +429,8 @@ class AdamOptimizer(BaseOptimizer):
         return x
     
     def optimize_batch(self, flow_batch: mx.array, 
-                      starting_points: Optional[mx.array] = None) -> mx.array:
+                      starting_points: Optional[mx.array] = None,
+                      weights_batch: Optional[mx.array] = None) -> mx.array:
         """
         Optimize a batch of optical flow samples to find vanishing points.
         Note: Samples are optimized sequentially.
@@ -424,6 +439,7 @@ class AdamOptimizer(BaseOptimizer):
             estimator: Instance of ParallelVanishingPointEstimator
             flow_batch: Batch of optical flows (batch_size, h, w, 2)
             starting_points: Optional starting points (batch_size, 2)
+            weights_batch: Optional weights batch (batch_size, h, w)
             
         Returns:
             Optimized vanishing points (batch_size, 2)
@@ -443,10 +459,11 @@ class AdamOptimizer(BaseOptimizer):
         for i in range(batch_size):
             single_flow = flow_batch[i]
             single_start_point = starting_points[i]
+            single_weights = weights_batch[i] if weights_batch is not None else None
             # TODO: try reoptimizing the starting point
             mx.eval(single_flow, single_start_point)
             
-            final_point = self.optimize_single(single_flow, single_start_point)
+            final_point = self.optimize_single(single_flow, single_start_point, single_weights)
             mx.eval(final_point)
             
             final_points.append(final_point)

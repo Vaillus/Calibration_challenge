@@ -103,7 +103,7 @@ class FlowPredictor:
     
     def __init__(self):
         pass
-    
+
     def process_video(
         self, 
         video_index: int, 
@@ -125,39 +125,34 @@ class FlowPredictor:
         """
         print(f"\n🎬 Traitement vidéo {video_index} - Run: {run_name}")
         
-        try:
-            # Préparation
-            pred_run_dir = self._prepare_output_directories(run_name, config)
-            
-            # Chargement des données
-            flows_data = self._load_video_flows(video_index)
-            if flows_data is None:
-                return False
-            
-            total_frames = flows_data.shape[0]
-            
-            # Traitement principal
-            all_predictions, total_time = self._process_batches(
-                flows_data, config, batch_size
-            )
-            
-            # Post-traitement
-            predictions_angles = self._post_process_predictions(all_predictions)
-            
-            # Sauvegarde et statistiques
-            self._save_results_and_print_stats(
-                predictions_angles, pred_run_dir, video_index, total_time, total_frames
-            )
-            
-            # Nettoyage final
-            del flows_data, all_predictions
-            gc.collect()
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ Erreur traitement vidéo {video_index}: {e}")
+        # Préparation
+        pred_run_dir = self._prepare_output_directories(run_name, config)
+        
+        # Chargement des données
+        flows_data = self._load_video_flows(video_index)
+        if flows_data is None:
             return False
+        
+        total_frames = flows_data.shape[0]
+        
+        # Traitement principal
+        all_predictions, total_time = self._process_batches(
+            flows_data, config, batch_size
+        )
+        
+        # Post-traitement
+        predictions_angles = self._post_process_predictions(all_predictions)
+        
+        # Sauvegarde et statistiques
+        self._save_results_and_print_stats(
+            predictions_angles, pred_run_dir, video_index, total_time, total_frames
+        )
+        
+        # Nettoyage final
+        del flows_data, all_predictions
+        gc.collect()
+        
+        return True
     
     def _prepare_output_directories(
         self, 

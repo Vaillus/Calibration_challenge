@@ -33,16 +33,14 @@ from src.utilities.ground_truth import read_ground_truth_pixels, read_ground_tru
 from src.core.flow_filter import FlowFilterBatch
 from src.utilities.pixel_angle_converter import pixels_to_angles
 from src.core.optimizers import AdamOptimizer
+from src.utilities.project_constants import get_project_constants
+from src.utilities.load_flows import load_flows
 
-# Camera parameters
-FOCAL_LENGTH = 910
 
 
 def optimize_batch_with_filtering(
     flow_batch: mx.array, 
-    config: Optional[Dict[str, Any]] = None,
-    plateau_threshold: float = 1e-4,
-    plateau_patience: int = 3
+    config: Optional[Dict[str, Any]] = None
 ) -> mx.array:
     """
     Optimise un batch de flux optiques avec filtrage optionnel.
@@ -67,34 +65,29 @@ def optimize_batch_with_filtering(
     Returns:
         Prédictions des points de fuite de shape (batch_size, 2)
     """
-    batch_size = flow_batch.shape[0]
     
     # Vérifier si du filtrage est demandé
     filtering_enabled = False
     if config is not None:
         filtering_enabled = (
-            config.get('filtering', {}).get('norm', {}).get('is_used', False) or 
-            config.get('filtering', {}).get('colinearity', {}).get('is_used', False) or
-            config.get('weighting', {}).get('norm', {}).get('is_used', False) or
-            config.get('weighting', {}).get('colinearity', {}).get('is_used', False)
+            config.get('norm', {}).get('is_used', False) or 
+            config.get('colinearity', {}).get('is_used', False) or
+            config.get('heatmap', {}).get('is_used', False)
         )
     
     if filtering_enabled:
         # Appliquer pipeline filtrage/pondération
         flow_filter = FlowFilterBatch(config)
-        filtered_flows, weights = flow_filter.filter_and_weight(flow_batch)
+        flow_batch, weights_batch = flow_filter.filter_and_weight(flow_batch)
         
-        mx.eval(filtered_flows)
-        mx.eval(weights)
-        
-        # Utiliser flux filtrés pour optimisation
-        flows_to_optimize = filtered_flows
-    else:
-        # Pas de filtrage - utiliser flux originaux directement
-        flows_to_optimize = flow_batch
+        mx.eval(flow_batch)
+        mx.eval(weights_batch)
     
     # Optimiser avec l'optimiseur Adam
-    predictions = AdamOptimizer(plateau_threshold=plateau_threshold, plateau_patience=plateau_patience).optimize_batch(flows_to_optimize)
+    predictions = AdamOptimizer().optimize_batch(
+        flow_batch, 
+        weights_batch=weights_batch
+    )
     mx.eval(predictions)
     
     return predictions
@@ -109,10 +102,8 @@ class FlowPredictor:
     """
     
     def __init__(self):
-        """Initialise le générateur de prédictions avec les chemins du projet."""
-        self.flows_dir = get_flows_dir()
-        self.pred_base_dir = get_pred_dir()
-        
+        pass
+    
     def process_video(
         self, 
         video_index: int, 
@@ -134,106 +125,29 @@ class FlowPredictor:
         """
         print(f"\n🎬 Traitement vidéo {video_index} - Run: {run_name}")
         
-        # Vérification existence fichier flux
-        npz_path = self.flows_dir / f"{video_index}_float16.npz"
-        if not npz_path.exists():
-            print(f"❌ Fichier flux non trouvé: {npz_path}")
-            return False
-        
-        # Préparation dossier sortie
-        pred_run_dir = ensure_dir_exists(self.pred_base_dir / run_name)
-        output_file = pred_run_dir / f"{video_index}.txt"
-        
-        # Sauvegarde configuration
-        config_file = pred_run_dir / "config.json"
-        self._save_config(config_file, config, run_name)
-        
         try:
-            # Chargement flux (float16 -> float32)
-            print(f"📂 Chargement flux depuis: {npz_path}")
-            with np.load(npz_path) as data:
-                flows_data_f16 = mx.array(data['flow'])
-            mx.eval(flows_data_f16)
+            # Préparation
+            pred_run_dir = self._prepare_output_directories(run_name, config)
             
-            flows_data = flows_data_f16.astype(mx.float32)
-            mx.eval(flows_data)
-            del flows_data_f16
-            gc.collect()
+            # Chargement des données
+            flows_data = self._load_video_flows(video_index)
+            if flows_data is None:
+                return False
             
             total_frames = flows_data.shape[0]
-            print(f"📊 Total frames: {total_frames}")
             
-            # Chargement ground truth pour conversion angles
-            _, image_width, image_height = read_ground_truth_angles(video_index)
+            # Traitement principal
+            all_predictions, total_time = self._process_batches(
+                flows_data, config, batch_size
+            )
             
-            # Traitement par batches
-            all_predictions = []
-            total_time = 0
+            # Post-traitement
+            predictions_angles = self._post_process_predictions(all_predictions)
             
-            print(f"🔄 Traitement par batches de {batch_size}...")
-            if config is None:
-                print("⚙️  Mode: AUCUN FILTRAGE")
-            else:
-                print("⚙️  Mode: FILTRAGE ACTIVÉ")
-            
-            for start_idx in range(0, total_frames, batch_size):
-                end_idx = min(start_idx + batch_size, total_frames)
-                
-                # Extraction batch
-                flow_batch = flows_data[start_idx:end_idx]
-                mx.eval(flow_batch)
-                
-                # Optimisation avec/sans filtrage
-                start_time = time.time()
-                predictions = optimize_batch_with_filtering(flow_batch, config)
-                mx.eval(predictions)
-                batch_time = time.time() - start_time
-                total_time += batch_time
-                
-                all_predictions.extend(predictions)
-                
-                print(f"  Frames {start_idx:4d}-{end_idx-1:4d}: {batch_time:.2f}s")
-                
-                # Nettoyage mémoire
-                del flow_batch, predictions
-                gc.collect()
-                
-                # Nettoyage périodique
-                if (start_idx // batch_size) % 10 == 9:
-                    print(f"    🧹 Nettoyage mémoire batch {start_idx // batch_size + 1}")
-                    if all_predictions:
-                        temp_pred = mx.stack(all_predictions, axis=0)
-                        mx.eval(temp_pred)
-                        all_predictions = list(temp_pred)
-                        del temp_pred
-                    gc.collect()
-            
-            # Finalisation prédictions
-            all_predictions = mx.stack(all_predictions, axis=0)
-            mx.eval(all_predictions)
-            predictions_np = np.array(all_predictions)
-            
-            # Correction offset temporel (duplication première frame)
-            first_prediction = predictions_np[0:1]
-            corrected_predictions_pixels = np.vstack([first_prediction, predictions_np])
-            
-            # Conversion pixels -> angles
-            corrected_predictions_angles = []
-            for x, y in corrected_predictions_pixels:
-                yaw, pitch = pixels_to_angles(x, y, FOCAL_LENGTH, image_width, image_height)
-                corrected_predictions_angles.append([yaw, pitch])
-            corrected_predictions_angles = np.array(corrected_predictions_angles)
-            
-            # Sauvegarde résultats
-            np.savetxt(output_file, corrected_predictions_angles, fmt='%.15e')
-            
-            # Statistiques
-            fps = total_frames / total_time
-            print(f"\n✅ Vidéo {video_index} terminée:")
-            print(f"   ⏱️  Temps total: {total_time:.2f}s")
-            print(f"   🚀 FPS: {fps:.2f}")
-            print(f"   💾 Prédictions: {output_file}")
-            print(f"   📏 Frames corrigées: {len(corrected_predictions_angles)}")
+            # Sauvegarde et statistiques
+            self._save_results_and_print_stats(
+                predictions_angles, pred_run_dir, video_index, total_time, total_frames
+            )
             
             # Nettoyage final
             del flows_data, all_predictions
@@ -245,6 +159,120 @@ class FlowPredictor:
             print(f"❌ Erreur traitement vidéo {video_index}: {e}")
             return False
     
+    def _prepare_output_directories(
+        self, 
+        run_name: str, 
+        config: Optional[Dict[str, Any]]
+    ) -> Path:
+        """Prépare les dossiers de sortie et sauvegarde la configuration."""
+        pred_run_dir = ensure_dir_exists(get_pred_dir(run_name))
+        config_file = pred_run_dir / "config.json"
+        self._save_config(config_file, config, run_name)
+        return pred_run_dir
+    
+    def _load_video_flows(self, video_index: int) -> Optional[mx.array]:
+        """Charge les flux optiques d'une vidéo."""
+        try:
+            flows_data = load_flows(video_index, return_mlx=True)
+            mx.eval(flows_data)
+            print(f"📊 Total frames: {flows_data.shape[0]}")
+            return flows_data
+        except Exception as e:
+            print(f"❌ Erreur chargement flux vidéo {video_index}: {e}")
+            return None
+    
+    def _process_batches(
+        self, 
+        flows_data: mx.array, 
+        config: Optional[Dict[str, Any]], 
+        batch_size: int
+    ) -> Tuple[List[mx.array], float]:
+        """Traite les flux par batches et retourne les prédictions et le temps total."""
+        total_frames = flows_data.shape[0]
+        all_predictions = []
+        total_time = 0
+        
+        print(f"🔄 Traitement par batches de {batch_size}...")
+        if config is None:
+            print("⚙️  Mode: AUCUN FILTRAGE")
+        else:
+            print("⚙️  Mode: FILTRAGE ACTIVÉ")
+        
+        for start_idx in range(0, total_frames, batch_size):
+            end_idx = min(start_idx + batch_size, total_frames)
+            
+            # Extraction batch
+            flow_batch = flows_data[start_idx:end_idx]
+            mx.eval(flow_batch)
+            
+            # Optimisation avec/sans filtrage
+            start_time = time.time()
+            predictions = optimize_batch_with_filtering(flow_batch, config)
+            mx.eval(predictions)
+            batch_time = time.time() - start_time
+            total_time += batch_time
+            
+            all_predictions.extend(predictions)
+            
+            print(f"  Frames {start_idx:4d}-{end_idx-1:4d}: {batch_time:.2f}s")
+            
+            # Nettoyage mémoire
+            del flow_batch, predictions
+            gc.collect()
+            
+            # Nettoyage périodique
+            if (start_idx // batch_size) % 10 == 9:
+                print(f"    🧹 Nettoyage mémoire batch {start_idx // batch_size + 1}")
+                if all_predictions:
+                    temp_pred = mx.stack(all_predictions, axis=0)
+                    mx.eval(temp_pred)
+                    all_predictions = list(temp_pred)
+                    del temp_pred
+                gc.collect()
+        
+        return all_predictions, total_time
+    
+    def _post_process_predictions(self, all_predictions: List[mx.array]) -> np.array:
+        """Post-traite les prédictions : stack, correction offset, conversion angles."""
+        # Finalisation prédictions
+        all_predictions = mx.stack(all_predictions, axis=0)
+        mx.eval(all_predictions)
+        predictions_np = np.array(all_predictions)
+        
+        # Correction offset temporel (duplication première frame)
+        first_prediction = predictions_np[0:1]
+        corrected_predictions_pixels = np.vstack([first_prediction, predictions_np])
+        
+        # Conversion pixels -> angles
+        corrected_predictions_angles = []
+        for x, y in corrected_predictions_pixels:
+            yaw, pitch = pixels_to_angles(x, y)
+            corrected_predictions_angles.append([yaw, pitch])
+        
+        return np.array(corrected_predictions_angles)
+    
+    def _save_results_and_print_stats(
+        self, 
+        predictions_angles: np.array, 
+        pred_run_dir: Path, 
+        video_index: int, 
+        total_time: float, 
+        total_frames: int
+    ) -> None:
+        """Sauvegarde les résultats et affiche les statistiques."""
+        output_file = pred_run_dir / f"{video_index}.txt"
+        np.savetxt(output_file, predictions_angles, fmt='%.15e')
+        
+        # Statistiques
+        fps = total_frames / total_time
+        print(f"\n✅ Vidéo {video_index} terminée:")
+        print(f"   ⏱️  Temps total: {total_time:.2f}s")
+        print(f"   🚀 FPS: {fps:.2f}")
+        print(f"   💾 Prédictions: {output_file}")
+        print(f"   📏 Frames corrigées: {len(predictions_angles)}")
+        
+
+
     def process_multiple_videos(
         self,
         video_indices: Optional[List[int]] = None,
@@ -263,8 +291,8 @@ class FlowPredictor:
             video_indices = list(range(5))  # Toutes les vidéos
         
         print(f"🚀 DÉMARRAGE RUN: {run_name}")
-        print(f"📂 Flux source: {self.flows_dir}")
-        print(f"📂 Prédictions: {self.pred_base_dir / run_name}")
+        print(f"📂 Flux source: {get_flows_dir()}")
+        print(f"📂 Prédictions: {get_pred_dir(run_name)}")
         print(f"🎯 Vidéos: {video_indices}")
         
         success_count = 0
@@ -305,5 +333,10 @@ def main(
 
 
 if __name__ == "__main__":
+    config = {
+        'norm': {'is_used': True, 'k': 150, 'x0': 13},
+        'colinearity': {'is_used': True, 'k': 150, 'x0': 0.96},
+        'heatmap': {'is_used': False, 'weight': 0.0}
+    }
     # Exemple d'utilisation sans filtrage
-    main(video_indices=[1, 2, 3, 4], config=None, run_name="no_filtering") 
+    main(config=config, run_name="5") 

@@ -66,13 +66,8 @@ def load_frame_data(video_idx: int, frame_idx: int) -> Tuple:
     
     # Apply simple filtering (min_threshold=13 only)
     filter_config = {
-        'filtering': {
-            'norm': {'is_used': True, 'min_threshold': 13},
-            "colinearity": {
-                "is_used": True,
-                "min_threshold": 0.96
-            }
-        }
+        'norm': {'is_used': True, 'k': 20, 'x0': 13},
+        'colinearity': {'is_used': False, 'k': 20, 'x0': 0.96}
     }
     
     flow_filter = FlowFilterSample(filter_config)

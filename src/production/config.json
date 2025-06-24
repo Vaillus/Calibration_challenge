@@ -1,11 +1,8 @@
 {
     "prediction_method": "colinearity",
     "use_segmentation": true,
-    "prediction_parameters": {
-        "use_max_distance": false,
-        "use_reoptimization": false
-    },
+    "prediction_parameters": {},
     "directories": {
-        "pred_dir": "pred/4"
+        "pred_dir": "pred/5"
     }
 } 

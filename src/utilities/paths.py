@@ -33,7 +33,7 @@ def get_flows_dir() -> Path:
     return get_intermediate_dir() / "flows"
 
 
-def get_pred_dir(generation_num: int) -> Path:
+def get_pred_dir(folder_name:str) -> Path:
     """Retourne le dossier des prédictions.
     
     Args:
@@ -42,7 +42,9 @@ def get_pred_dir(generation_num: int) -> Path:
     Returns:
         Path vers data/outputs/predictions/{generation_num}/
     """
-    return get_outputs_dir() / "pred" / str(generation_num)
+    if type(folder_name) == int:
+        folder_name = str(folder_name)
+    return get_outputs_dir() / "pred" / folder_name
 
 
 def get_means_dir(video_num: Optional[int] = None) -> Path:

@@ -553,8 +553,8 @@ def main(video_index, start_frame, predictions_dir="3", show_vp=True):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    video_index = 4
-    start_frame = 220
+    video_index = 2
+    start_frame = 0
     predictions_dir = "5"  # Change this to use different prediction directories (e.g., "3", "5", "vanilla", etc.)
     show_vp = False  # Set to False to disable vanishing point calculation and display
     main(video_index, start_frame, predictions_dir, show_vp)

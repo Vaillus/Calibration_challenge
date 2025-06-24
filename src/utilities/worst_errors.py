@@ -181,7 +181,7 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
         raise ValueError("Le décile doit être entre 1 et 10")
     
     scope = f"video {video_id}" if video_id is not None else "toutes les vidéos"
-    print(f"🎲 Sélection de {n_frames} frames aléatoires du {decile}ème décile ({scope})...")
+    # print(f"🎲 Sélection de {n_frames} frames aléatoires du {decile}ème décile ({scope})...")
     
     # 1. Calculer toutes les distances avec coordonnées
     all_distances_with_coords = []
@@ -207,7 +207,7 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
     percentile_start = np.percentile(distances, p_start)
     percentile_end = np.percentile(distances, p_end)
     
-    print(f"📊 {decile}ème décile: {percentile_start:.1f} - {percentile_end:.1f} pixels")
+    # print(f"📊 {decile}ème décile: {percentile_start:.1f} - {percentile_end:.1f} pixels")
     
     # 3. Filtrer les frames dans le décile demandé
     frames_in_decile = [
@@ -216,7 +216,7 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
         if percentile_start <= dist <= percentile_end
     ]
     
-    print(f"🎯 {len(frames_in_decile)} frames dans le {decile}ème décile")
+    # print(f"🎯 {len(frames_in_decile)} frames dans le {decile}ème décile")
     
     if len(frames_in_decile) < n_frames:
         print(f"⚠️  Seulement {len(frames_in_decile)} frames disponibles")
@@ -225,9 +225,9 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
     # 4. Sélectionner aléatoirement
     selected_frames = random.sample(frames_in_decile, n_frames)
     
-    print(f"✅ {n_frames} frames sélectionnés aléatoirement:")
-    for i, (vid, frame) in enumerate(selected_frames, 1):
-        print(f"   {i}. Video {vid}, Frame {frame}")
+    # print(f"✅ {n_frames} frames sélectionnés aléatoirement:")
+    # for i, (vid, frame) in enumerate(selected_frames, 1):
+        # print(f"   {i}. Video {vid}, Frame {frame}")
     
     return selected_frames
 
@@ -245,12 +245,12 @@ def select_frames_from_all_deciles(run_name="vanilla", n_frames_per_decile=5, vi
               Format: {1: [(video, frame), ...], 2: [(video, frame), ...], ...}
     """
     scope = f"video {video_id}" if video_id is not None else "toutes les vidéos"
-    print(f"🎯 Sélection de {n_frames_per_decile} frames par décile pour {scope}...")
+    # print(f"🎯 Sélection de {n_frames_per_decile} frames par décile pour {scope}...")
     
     all_frames = []
     
     for decile in range(1, 11):  # Déciles 1 à 10
-        print(f"\n--- Décile {decile} ---")
+        # print(f"\n--- Décile {decile} ---")
         frames = select_frames_from_decile(
             run_name=run_name,
             decile=decile,

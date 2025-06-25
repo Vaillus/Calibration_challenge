@@ -35,8 +35,8 @@ def read_ground_truth_angles(video_index: int) -> Tuple[List[Tuple[float, float]
     gt_angles = []
     with open(gt_path, 'r') as f:
         for line in f:
-            pitch, yaw = map(float, line.strip().split())  # First number = pitch, second = yaw
-            gt_angles.append((yaw, pitch))  # Stored in the order expected by angles_to_pixels
+            yaw, pitch = map(float, line.strip().split())  # First number = yaw, second = pitch
+            gt_angles.append((yaw, pitch))  # Stored in the order expected by angles_to_pixels (yaw, pitch)
             
     return gt_angles, width, height
 

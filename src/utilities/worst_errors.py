@@ -22,8 +22,8 @@ def load_distances_with_frame_info(video_id, run_name="vanilla"):
         return None, None
     
     # Load data
-    gt_data = np.loadtxt(gt_path)  # (pitch, yaw) in radians
-    pred_data = np.loadtxt(pred_path)  # (pitch, yaw) in radians
+    gt_data = np.loadtxt(gt_path)  # (yaw, pitch) in radians
+    pred_data = np.loadtxt(pred_path)  # (yaw, pitch) in radians
     
     # Ensure same number of frames
     min_frames = min(len(gt_data), len(pred_data))
@@ -40,10 +40,10 @@ def load_distances_with_frame_info(video_id, run_name="vanilla"):
             continue
             
         # Convert angles to pixels
-        pitch_gt, yaw_gt = gt_data[i]
+        yaw_gt, pitch_gt = gt_data[i]
         x_gt, y_gt = angles_to_pixels(yaw_gt, pitch_gt, DEFAULT_FOCAL_LENGTH, IMAGE_WIDTH, IMAGE_HEIGHT)
         
-        pitch_pred, yaw_pred = pred_data[i]
+        yaw_pred, pitch_pred = pred_data[i]
         x_pred, y_pred = angles_to_pixels(yaw_pred, pitch_pred, DEFAULT_FOCAL_LENGTH, IMAGE_WIDTH, IMAGE_HEIGHT)
         
         # Calculate distance

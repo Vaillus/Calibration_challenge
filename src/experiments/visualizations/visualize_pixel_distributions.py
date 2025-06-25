@@ -44,8 +44,8 @@ def plot_video_distribution(ax, gt_pixels, pred_pixels):
     gt_std = np.std(gt_pixels, axis=0)
     
     # Points individuels
-    ax.scatter(pred_pixels[:, 0], pred_pixels[:, 1], c='red', alpha=0.1, s=50)
-    ax.scatter(gt_pixels[:, 0], gt_pixels[:, 1], c='blue', alpha=0.1, s=50)
+    ax.scatter(pred_pixels[:, 0], pred_pixels[:, 1], c='red', alpha=0.1, s=5)
+    ax.scatter(gt_pixels[:, 0], gt_pixels[:, 1], c='blue', alpha=0.1, s=5)
     
     # Moyennes (cercles)
     ax.plot(pred_mean[0], pred_mean[1], 'ro', markersize=15)
@@ -88,8 +88,8 @@ def main():
             pred = np.loadtxt(get_pred_dir(5) / f"{video_idx}.txt")
             
             # Conversion angles vers pixels
-            pred_pixels = np.array([angles_to_pixels(yaw, pitch) for pitch, yaw in pred])
-            gt_pixels = np.array([angles_to_pixels(yaw, pitch) for pitch, yaw in gt])
+            pred_pixels = np.array([angles_to_pixels(yaw, pitch) for yaw, pitch in pred])
+            gt_pixels = np.array([angles_to_pixels(yaw, pitch) for yaw, pitch in gt])
             
             # Position du sous-graphique
             row, col = video_idx // 3, video_idx % 3

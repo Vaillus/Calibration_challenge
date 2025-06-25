@@ -183,7 +183,7 @@ def load_predictions(video_index, frame_width, frame_height, predictions_dir="3"
     if predictions_path.exists():
         with open(predictions_path, 'r') as f:
             for line in f:
-                pitch, yaw = map(float, line.strip().split())
+                yaw, pitch = map(float, line.strip().split())
                 x, y = angles_to_pixels(yaw, pitch, FOCAL_LENGTH, frame_width, frame_height)
                 pred_pixels.append((x, y))
     

@@ -23,7 +23,7 @@ def load_predictions(video_index, frame_index=None, predictions_dir="5") -> Unio
         with open(predictions_path, 'r') as f:
             for line in f:
                 pitch, yaw = map(float, line.strip().split())
-                x, y = angles_to_pixels(yaw, pitch)
+                x, y = angles_to_pixels(pitch, yaw)
                 pred_pixels.append((x, y))
     if frame_index is not None:
         return pred_pixels[frame_index]

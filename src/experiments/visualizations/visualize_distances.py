@@ -25,8 +25,8 @@ def calculate_distances(video_id, run_name="vanilla"):
         raise FileNotFoundError(f"Prediction file not found: {pred_path}")
     
     # Load data
-    gt_data = np.loadtxt(gt_path)  # (yaw, pitch) in radians
-    pred_data = np.loadtxt(pred_path)  # (yaw, pitch) in radians
+    gt_data = np.loadtxt(gt_path)  # (pitch, yaw) in radians
+    pred_data = np.loadtxt(pred_path)  # (pitch, yaw) in radians
     
     # Ensure same number of frames
     min_frames = min(len(gt_data), len(pred_data))
@@ -49,12 +49,12 @@ def calculate_distances(video_id, run_name="vanilla"):
             continue
             
         # Convert ground truth angles to pixels
-        yaw_gt, pitch_gt = gt_data[i]
-        x_gt, y_gt = angles_to_pixels(yaw_gt, pitch_gt)
+        pitch_gt, yaw_gt = gt_data[i]
+        x_gt, y_gt = angles_to_pixels(pitch_gt, yaw_gt)
         
         # Convert prediction angles to pixels
-        yaw_pred, pitch_pred = pred_data[i]
-        x_pred, y_pred = angles_to_pixels(yaw_pred, pitch_pred)
+        pitch_pred, yaw_pred = pred_data[i]
+        x_pred, y_pred = angles_to_pixels(pitch_pred, yaw_pred)
         
         # Calculate distance
         distances[i] = np.sqrt((x_gt - x_pred)**2 + (y_gt - y_pred)**2)

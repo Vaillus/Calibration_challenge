@@ -33,7 +33,7 @@ from src.core.optimizers import AdamOptimizer
 import random
 
 
-def load_frame_data(video_idx: int, frame_idx: int) -> Tuple:
+def load_frame_data(run_name: str, video_idx: int, frame_idx: int) -> Tuple:
     """
     Charge toutes les données nécessaires pour une frame.
     
@@ -59,15 +59,16 @@ def load_frame_data(video_idx: int, frame_idx: int) -> Tuple:
     gt_point = (gt_pixels[0], gt_pixels[1])
     
     # Load prediction
-    pred_point = load_predictions(video_idx, frame_idx)
+    pred_point = load_predictions(video_idx, frame_idx, run_name)
     
     # Center point
     center_point = (frame_rgb.shape[1] // 2, frame_rgb.shape[0] // 2)
     
     # Apply simple filtering (min_threshold=13 only)
     filter_config = {
-        'norm': {'is_used': True, 'k': 20, 'x0': 13},
-        'colinearity': {'is_used': False, 'k': 20, 'x0': 0.96}
+        'norm': {'is_used': True, 'k': 150, 'x0': 13},
+        'colinearity': {'is_used': False, 'k': 150, 'x0': 0.96},
+        'heatmap': {'is_used': False}
     }
     
     flow_filter = FlowFilterSample(filter_config)
@@ -299,7 +300,7 @@ def plot_optimizer_trajectory(ax, filtered_flow: np.ndarray,
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
 
 
-def visualize_frame_full(video_idx: int = 1, frame_idx: int = 201):
+def visualize_frame_full(run_name: str, video_idx: int = 1, frame_idx: int = 201):
     """
     Visualisation complète avec 3 panneaux côte à côte.
     
@@ -311,7 +312,7 @@ def visualize_frame_full(video_idx: int = 1, frame_idx: int = 201):
     print("=" * 60)
     
     # Load frame data
-    frame_rgb, flow_data, filtered_flow, gt_point, pred_point, center_point = load_frame_data(video_idx, frame_idx)
+    frame_rgb, flow_data, filtered_flow, gt_point, pred_point, center_point = load_frame_data(run_name, video_idx, frame_idx)
     
     # Create figure with 3 subplots
     fig, axes = plt.subplots(1, 3, figsize=(20, 7))
@@ -421,9 +422,10 @@ def main():
     else:
         # Configuration par défaut
         VIDEO_IDX = 1
-        FRAME_IDX = 201
+        FRAME_IDX = 202
+        run_name = "5_3"
         print(f"📊 Visualisation par défaut: Vidéo {VIDEO_IDX}, Frame {FRAME_IDX}")
-        visualize_frame_full(video_idx=VIDEO_IDX, frame_idx=FRAME_IDX)
+        visualize_frame_full(run_name=run_name, video_idx=VIDEO_IDX, frame_idx=FRAME_IDX)
 
 
 if __name__ == "__main__":

@@ -71,7 +71,7 @@ def fix_predictions(pred_dir='pred/3', gt_dir='labeled'):
             
             # SOLUTION : Dupliquer la première prédiction pour représenter la frame 0
             # pred[0] était la prédiction pour frame 1, elle devient aussi la prédiction pour frame 0
-            first_pred = pred[0:1]  # Garder la forme (1, 2) pour yaw/pitch
+            first_pred = pred[0:1]  # Garder la forme (1, 2) pour pitch/yaw
             pred = np.vstack([first_pred, pred])  # [frame0_pred, frame1_pred, frame2_pred, ...]
             
             # Sauvegarder les prédictions ajustées

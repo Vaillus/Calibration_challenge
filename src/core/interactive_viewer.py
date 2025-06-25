@@ -161,7 +161,7 @@ def load_ground_truth(video_index, frame_width, frame_height):
             - gt_angles: List of ground truth angles
     """
     gt_pixels = read_ground_truth_pixels(video_index, FOCAL_LENGTH)
-    gt_angles, _, _ = read_ground_truth_angles(video_index)
+    gt_angles = read_ground_truth_angles(video_index)
     return gt_pixels, gt_angles
 
 def load_predictions(video_index, frame_width, frame_height, predictions_dir="3"):
@@ -183,8 +183,8 @@ def load_predictions(video_index, frame_width, frame_height, predictions_dir="3"
     if predictions_path.exists():
         with open(predictions_path, 'r') as f:
             for line in f:
-                yaw, pitch = map(float, line.strip().split())
-                x, y = angles_to_pixels(yaw, pitch, FOCAL_LENGTH, frame_width, frame_height)
+                pitch, yaw = map(float, line.strip().split())
+                x, y = angles_to_pixels(pitch, yaw, FOCAL_LENGTH, frame_width, frame_height)
                 pred_pixels.append((x, y))
     
     return pred_pixels
@@ -398,7 +398,7 @@ def update_visualization(state, gt_pixels, gt_angles, pred_pixels, show_vp=True)
         # Add ground truth point if available
         if state.current_frame_number < len(gt_pixels):
             gt_x, gt_y = gt_pixels[state.current_frame_number]
-            gt_yaw, gt_pitch = gt_angles[state.current_frame_number]
+            gt_pitch, gt_yaw = gt_angles[state.current_frame_number]
             
             # Draw ground truth point
             cv2.circle(output, (gt_x, gt_y), 5, (0, 0, 255), -1)
@@ -407,7 +407,7 @@ def update_visualization(state, gt_pixels, gt_angles, pred_pixels, show_vp=True)
             # Add debug info
             center_x, center_y = state.frame_width // 2, state.frame_height // 2
             cv2.circle(output, (center_x, center_y), 5, (255, 0, 0), -1)
-            text = f"GT: yaw={np.degrees(gt_yaw):.2f}°, pitch={np.degrees(gt_pitch):.2f}°, (x={gt_x}, y={gt_y})"
+            text = f"GT: pitch={np.degrees(gt_pitch):.2f}°, yaw={np.degrees(gt_yaw):.2f}°, (x={gt_x}, y={gt_y})"
             cv2.putText(output, text, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         
         # Add predictions if available

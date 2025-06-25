@@ -17,28 +17,18 @@ def read_ground_truth_angles(video_index: int) -> Tuple[List[Tuple[float, float]
         
     Returns:
         Tuple containing:
-        - List of tuples (yaw, pitch) in radians
-        - Video width in pixels
-        - Video height in pixels
+        - List of tuples (pitch, yaw) in radians
     """
     labeled_dir = get_labeled_dir()
     gt_path = labeled_dir / f"{video_index}.txt"
-    video_path = labeled_dir / f"{video_index}.hevc"
-    
-    # Get video dimensions using OpenCV
-    cap = cv2.VideoCapture(video_path)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    cap.release()
-    #print(f"image_width: {width}, image_height: {height}")
     
     gt_angles = []
     with open(gt_path, 'r') as f:
         for line in f:
-            yaw, pitch = map(float, line.strip().split())  # First number = yaw, second = pitch
-            gt_angles.append((yaw, pitch))  # Stored in the order expected by angles_to_pixels (yaw, pitch)
+            pitch, yaw = map(float, line.strip().split())  # First number = pitch, second = yaw
+            gt_angles.append((pitch, yaw))  # Stored in the order expected by angles_to_pixels (pitch, yaw)
             
-    return gt_angles, width, height
+    return gt_angles
 
 def read_ground_truth_pixels(video_index: int, focal_length: float=DEFAULT_FOCAL_LENGTH) -> List[Tuple[int, int]]:
     """
@@ -54,8 +44,8 @@ def read_ground_truth_pixels(video_index: int, focal_length: float=DEFAULT_FOCAL
     gt_angles, image_width, image_height = read_ground_truth_angles(video_index)
     gt_pixels = []
     
-    for yaw, pitch in gt_angles:
-        x, y = angles_to_pixels(yaw, pitch, focal_length, image_width, image_height)
+    for pitch, yaw in gt_angles:
+        x, y = angles_to_pixels(pitch, yaw, focal_length, image_width, image_height)
         gt_pixels.append((x, y))
         
     return gt_pixels
@@ -69,12 +59,18 @@ def get_frame_angles(video_index: int, frame_index: int) -> Tuple[float, float]:
         frame_index: Index of the frame
         
     Returns:
-        Tuple (yaw, pitch) in radians
+        Tuple (pitch, yaw) in radians
     """
-    gt_angles, _, _ = read_ground_truth_angles(video_index)
-    if frame_index >= len(gt_angles):
-        raise IndexError(f"Frame index {frame_index} out of range (max: {len(gt_angles)-1})")
-    return gt_angles[frame_index]
+    labeled_dir = get_labeled_dir()
+    gt_path = labeled_dir / f"{video_index}.txt"
+    
+    with open(gt_path, 'r') as f:
+        for i, line in enumerate(f):
+            if i == frame_index:
+                pitch, yaw = map(float, line.strip().split())
+                return (pitch, yaw)
+    
+    raise IndexError(f"Frame index {frame_index} out of range")
 
 def get_frame_pixel(video_index: int, frame_index: int, focal_length: float=DEFAULT_FOCAL_LENGTH) -> Tuple[int, int]:
     """
@@ -87,7 +83,8 @@ def get_frame_pixel(video_index: int, frame_index: int, focal_length: float=DEFA
     Returns:
         Tuple (x, y) in pixels
     """
-    x, y = read_ground_truth_pixels(video_index, focal_length)[frame_index]
+    pitch, yaw = get_frame_angles(video_index, frame_index)
+    x, y = angles_to_pixels(pitch, yaw)
     return x, y
 
 def main():
@@ -106,8 +103,8 @@ def main():
         print(f"x = {x}, y = {y}")
         
         # Test get_frame_angles for comparison
-        yaw, pitch = get_frame_angles(video_index, frame_index)
-        print(f"Corresponding angles: yaw = {yaw} rad, pitch = {pitch} rad")
+        pitch, yaw = get_frame_angles(video_index, frame_index)
+        print(f"Corresponding angles: pitch = {pitch} rad, yaw = {yaw} rad")
         
     except Exception as e:
         print(f"Error during test: {e}")

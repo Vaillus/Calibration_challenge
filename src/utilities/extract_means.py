@@ -3,7 +3,7 @@
 Script utilitaire pour extraire les moyennes des prédictions converties en pixels.
 
 Ce script :
-1. Récupère les prédictions d'angles (yaw, pitch) du dossier data/outputs/pred/5/
+1. Récupère les prédictions d'angles (pitch, yaw) du dossier data/outputs/pred/5/
 2. Convertit les angles en coordonnées pixels via la fonction de conversion
 3. Calcule la moyenne des prédictions converties (en ignorant les NaN)
 4. Sauvegarde les résultats dans data/outputs/means/5/
@@ -28,7 +28,7 @@ def load_prediction_file(file_path: Path) -> np.ndarray:
         file_path: Chemin vers le fichier de prédictions
         
     Returns:
-        Array numpy avec les prédictions [yaw, pitch]
+        Array numpy avec les prédictions [pitch, yaw]
     """
     data = []
     
@@ -36,8 +36,8 @@ def load_prediction_file(file_path: Path) -> np.ndarray:
         for line in f:
             line = line.strip()
             try:
-                yaw, pitch = map(float, line.split())
-                data.append([yaw, pitch])
+                pitch, yaw = map(float, line.split())
+                data.append([pitch, yaw])
             except ValueError:
                 # Si on ne peut pas parser la ligne, mettre des NaN
                 data.append([np.nan, np.nan])
@@ -49,18 +49,18 @@ def convert_angles_to_pixels(angles_data: np.ndarray) -> np.ndarray:
     """Convertit un array d'angles en coordonnées pixels.
     
     Args:
-        angles_data: Array numpy avec les angles [yaw, pitch]
+        angles_data: Array numpy avec les angles [pitch, yaw]
         
     Returns:
         Array numpy avec les coordonnées pixels [x, y]
     """
     pixels_data = []
     
-    for yaw, pitch in angles_data:
-        if np.isnan(yaw) or np.isnan(pitch):
+    for pitch, yaw in angles_data:
+        if np.isnan(pitch) or np.isnan(yaw):
             pixels_data.append([np.nan, np.nan])
         else:
-            x, y = angles_to_pixels(yaw, pitch)
+            x, y = angles_to_pixels(pitch, yaw)
             pixels_data.append([x, y])
     
     return np.array(pixels_data)

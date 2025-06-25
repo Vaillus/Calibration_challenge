@@ -1,3 +1,22 @@
+"""
+Convertisseur entre coordonnées pixels et angles.
+
+CONVENTION PROJET IMPORTANTE :
+=============================
+Partout dans ce projet, l'ordre des angles est TOUJOURS (pitch, yaw) :
+- pitch = angle vertical (axe Y) - montée/descente 
+- yaw = angle horizontal (axe X) - gauche/droite
+
+Même si conceptuellement on pense (x, y), on utilise (pitch, yaw) pour être
+cohérent avec l'ordre des données dans les fichiers : "pitch yaw"
+
+Cette convention s'applique à :
+- Paramètres des fonctions : angles_to_pixels(pitch, yaw, ...)
+- Valeurs de retour : pixels_to_angles() -> (pitch, yaw) 
+- Lecture/écriture fichiers : "pitch yaw" sur chaque ligne
+- Toutes les variables et tuples dans le code
+"""
+
 import numpy as np
 
 from src.utilities.project_constants import get_project_constants
@@ -17,8 +36,8 @@ class PixelAngleConverter:
     
     def angles_to_pixels(
             self, 
-            yaw, 
             pitch, 
+            yaw, 
             focal_length=None, 
             image_width=None, 
             image_height=None
@@ -29,13 +48,15 @@ class PixelAngleConverter:
         Les angles sont donnés dans le repère Car [Forward, Right, Down] et doivent être
         convertis dans le repère Camera [Right, Down, Forward].
         
+        CONVENTION PROJET: (pitch, yaw) - pitch d'abord, yaw ensuite
+        
         Args:
-            yaw: Angle horizontal en radians dans le repère Car
-                - yaw > 0 : virage à droite
-                - yaw < 0 : virage à gauche
-            pitch: Angle vertical en radians dans le repère Car
+            pitch: Angle vertical en radians dans le repère Car (axe Y)
                 - pitch > 0 : montée
                 - pitch < 0 : descente
+            yaw: Angle horizontal en radians dans le repère Car (axe X)
+                - yaw > 0 : virage à droite
+                - yaw < 0 : virage à gauche
             focal_length: Focale en pixels. Si None, utilise la valeur du projet.
             image_width: Largeur de l'image en pixels. Si None, utilise la valeur du projet.
             image_height: Hauteur de l'image en pixels. Si None, utilise la valeur du projet.
@@ -82,6 +103,8 @@ class PixelAngleConverter:
         """
         Convertit les coordonnées en pixels en angles en radians.
         
+        CONVENTION PROJET: retourne (pitch, yaw) - pitch d'abord, yaw ensuite
+        
         Args:
             x: Position x en pixels (0 = gauche, image_width = droite)
             y: Position y en pixels (0 = haut, image_height = bas)
@@ -90,13 +113,13 @@ class PixelAngleConverter:
             image_height: Hauteur de l'image en pixels. Si None, utilise la valeur du projet.
         
         Returns:
-            tuple: (yaw, pitch) où:
-                yaw: Angle horizontal en radians
-                    - yaw > 0 : virage à droite
-                    - yaw < 0 : virage à gauche
-                pitch: Angle vertical en radians
+            tuple: (pitch, yaw) où:
+                pitch: Angle vertical en radians (axe Y)
                     - pitch > 0 : montée
                     - pitch < 0 : descente
+                yaw: Angle horizontal en radians (axe X)
+                    - yaw > 0 : virage à droite
+                    - yaw < 0 : virage à gauche
         """
         # Use provided values or fall back to project constants
         focal_length = focal_length or self.focal_length
@@ -112,7 +135,7 @@ class PixelAngleConverter:
         yaw = np.arctan2(x_centered, focal_length)
         pitch = np.arctan2(-y_centered, focal_length)
         
-        return yaw, pitch
+        return pitch, yaw
 
 # Create a singleton instance for convenience
 converter = PixelAngleConverter()

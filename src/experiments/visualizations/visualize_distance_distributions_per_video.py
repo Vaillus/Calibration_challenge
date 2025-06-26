@@ -142,7 +142,7 @@ def main():
     # Ask for run name
     run_name = input("Entrez le nom du run à analyser (défaut: 'vanilla'): ").strip()
     if not run_name:
-        run_name = "5"
+        run_name = "7"
     
     print(f"\nAnalyse du run: {run_name}")
     

@@ -61,7 +61,7 @@ class FlowFilterBase:
             heatmap_min = np.min(heatmap)
             heatmap_max = np.max(heatmap)
             self.normalized_heatmap = (heatmap - heatmap_min) / (heatmap_max - heatmap_min)
-            print(f"✅ Heatmap loaded: {heatmap.shape}, range [{heatmap_min:.3f}, {heatmap_max:.3f}] → [0, 1]")
+            # print(f"✅ Heatmap loaded: {heatmap.shape}, range [{heatmap_min:.3f}, {heatmap_max:.3f}] → [0, 1]")
         except Exception as e:
             print(f"❌ Error loading heatmap: {e}")
             self.normalized_heatmap = None

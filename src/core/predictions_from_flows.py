@@ -325,9 +325,9 @@ def main(
 
 if __name__ == "__main__":
     config = {
-        'norm': {'is_used': True, 'k': -10, 'x0': 1.0},
-        'colinearity': {'is_used': True, 'k': 119.25, 'x0': 1.1053},
-        'heatmap': {'is_used': True, 'weight': 0.79, 'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy'}
+        'norm': {'is_used': True, 'k': -10, 'x0': -1.88},
+        'colinearity': {'is_used': True, 'k': 113.59, 'x0': 1.0799},
+        'heatmap': {'is_used': True, 'weight': 0.72, 'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy'}
     }
     # Exemple d'utilisation sans filtrage
     main(video_indices=[0,1,2,3,4], config=config, run_name="7") 

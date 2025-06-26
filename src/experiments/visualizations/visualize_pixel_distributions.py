@@ -74,7 +74,7 @@ def plot_video_distribution(ax, gt_pixels, pred_pixels):
     ax.grid(True)
 
 
-def main():
+def main(run_name: str):
     """Fonction principale qui crée la visualisation pour toutes les vidéos."""
     # Création de la figure avec sous-graphiques
     fig, axes = plt.subplots(2, 3, figsize=(20, 12))
@@ -85,7 +85,7 @@ def main():
         try:
             # Chargement des données
             gt = np.loadtxt(get_labeled_dir() / f"{video_idx}.txt")
-            pred = np.loadtxt(get_pred_dir("5_3") / f"{video_idx}.txt")
+            pred = np.loadtxt(get_pred_dir(run_name) / f"{video_idx}.txt")
             
             # Conversion angles vers pixels
             pred_pixels = np.array([angles_to_pixels(pitch, yaw) for pitch, yaw in pred])
@@ -113,4 +113,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main(run_name="5_4") 

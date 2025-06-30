@@ -44,7 +44,9 @@ from src.utilities.load_mean_point import load_mean_point
 def process_multiple_videos(
     video_indices: Optional[List[int]] = None,
     config: Optional[Dict[str, Any]] = None,
-    run_name: str = "default"
+    run_name: str = "default",
+    mean_point_run_name: str = "8",
+    is_mean_point_used: bool = False
 ) -> None:
     """
     Traite plusieurs vidéos avec la même configuration.
@@ -64,7 +66,7 @@ def process_multiple_videos(
     
     success_count = 0
     for video_idx in video_indices:
-        video_processed = process_video(video_idx, config, run_name)
+        video_processed = process_video(video_idx, config, run_name, mean_point_run_name=mean_point_run_name, is_mean_point_used=is_mean_point_used)
         if video_processed:
             success_count += 1
     
@@ -74,7 +76,9 @@ def process_video(
     video_index: int, 
     config: Optional[Dict[str, Any]] = None,
     run_name: str = "default",
-    batch_size: int = 200
+    batch_size: int = 200,
+    mean_point_run_name: str = "8",
+    is_mean_point_used: bool = False
 ) -> bool:
     """
     Traite une vidéo complète avec la configuration donnée.
@@ -92,7 +96,10 @@ def process_video(
     
     # Préparation
     pred_run_dir = prepare_output_directories(run_name, config)
-    mean_point = load_mean_point("5_4",video_index)
+    if is_mean_point_used:
+        mean_point = load_mean_point(mean_point_run_name, video_index)
+    else:
+        mean_point = None
     # Chargement des données
     flows_data = load_video_flows(video_index)
     if flows_data is None:
@@ -102,7 +109,8 @@ def process_video(
     
     # Traitement principal
     all_predictions, total_time = process_batches(
-        flows_data, config, batch_size, mean_point
+        flows_data, config, batch_size,
+         mean_point
     )
     
     # Post-traitement
@@ -123,7 +131,7 @@ def process_batches(
     flows_data: mx.array, 
     config: Optional[Dict[str, Any]], 
     batch_size: int,
-    mean_point: Tuple[float, float]
+    mean_point: Optional[Tuple[float, float]] = None
 ) -> Tuple[List[mx.array], float]:
     """Traite les flux par batches et retourne les prédictions et le temps total."""
     total_frames = flows_data.shape[0]
@@ -211,17 +219,17 @@ def optimize_batch_with_filtering(
     if filtering_enabled:
         # Appliquer pipeline filtrage/pondération
         flow_filter = FlowFilterBatch(config)
-        flow_batch, weights_batch = flow_filter.filter_and_weight(flow_batch)
+        flow_batch, weights_batch = flow_filter.filter_and_weight(flow_batch, mean_point)
         # flow_batch = flow_filter.filter(flow_batch)
         mx.eval(flow_batch)
         mx.eval(weights_batch)
-    mean_point = mx.array([mean_point[0], mean_point[1]], dtype=mx.float32)
-    starting_points = mx.tile(mean_point, (flow_batch.shape[0], 1))
+    # mean_point = mx.array([mean_point[0], mean_point[1]], dtype=mx.float32)
+    # starting_points = mx.tile(mean_point, (flow_batch.shape[0], 1))
 
     # Optimiser avec l'optimiseur Adam
     predictions = AdamOptimizer().optimize_batch(
         flow_batch, 
-        starting_points=starting_points,
+        # starting_points=starting_points,
         weights_batch=weights_batch,
     )
     mx.eval(predictions)
@@ -310,7 +318,9 @@ def save_config(config_file: Path, config: Optional[Dict[str, Any]], run_name: s
 def main(
     video_indices: Optional[List[int]] = None,
     config: Optional[Dict[str, Any]] = None,
-    run_name: str = "default"
+    run_name: str = "default",
+    mean_point_run_name: str = "8",
+    is_mean_point_used: bool = False
 ) -> None:
     """
     Point d'entrée principal pour la génération de prédictions à partir de flux.
@@ -320,14 +330,26 @@ def main(
         config: Configuration de filtrage (défaut: aucun filtrage)
         run_name: Nom du run pour organisation des résultats
     """
-    process_multiple_videos(video_indices, config, run_name)
+    process_multiple_videos(video_indices, config, run_name, mean_point_run_name, is_mean_point_used)
 
 
 if __name__ == "__main__":
     config = {
-        'norm': {'is_used': True, 'k': -10, 'x0': -1.88},
-        'colinearity': {'is_used': True, 'k': 113.59, 'x0': 1.0799},
-        'heatmap': {'is_used': True, 'weight': 0.72, 'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy'}
+    "norm": {
+      "is_used": True,
+      "k": -10,
+      "x0": 1.0
+    },
+    "colinearity": {
+      "is_used": True,
+      "k": 118.25,
+      "x0": 1.1053
+    },
+    "heatmap": {
+      "is_used": True,
+      "weight": 0.79,
+      "path": "/Users/hugovaillaud/Documents/code/ibiza_project/calib_challenge/data/intermediate/heatmaps/unfiltered/global/global_heatmap.npy"
     }
+  }
     # Exemple d'utilisation sans filtrage
-    main(video_indices=[0,1,2,3,4], config=config, run_name="7") 
+    main(video_indices=[0,1,2,3,4], config=config, run_name="7", mean_point_run_name="8", is_mean_point_used=True) 

@@ -103,19 +103,11 @@ def benchmark_single_frame(flow_data, ground_truth_point, frame_idx=0):
     print(f"\n--- Adam (Version parallèle) ---")
     
     # Create estimator for score calculation
-    par_estimator = BatchCollinearityScorer(
-        flow_data.shape[1], flow_data.shape[0], 
-        use_max_distance=False, use_reoptimization=False
-    )
+    par_estimator = BatchCollinearityScorer()
     
     start_time = time.time()
-    adam_points = AdamOptimizer(plateau_threshold=0, plateau_patience=3).optimize_batch(filtered_flow_batch)
-    
-    adam_optimize_batch(
-        filtered_flow_batch, 
-        plateau_threshold=0,  # Disable early stopping - run full 50 iterations
-        plateau_patience=3
-    )
+    adam_optimizer = AdamOptimizer(plateau_threshold=0, plateau_patience=3)
+    adam_points = adam_optimizer.optimize_batch(filtered_flow_batch)
     adam_time = time.time() - start_time
     
     adam_point = adam_points[0]
@@ -293,32 +285,197 @@ def benchmark_multiple_frames(num_frames=10, video_id=0):
     }
 
 
+def find_problematic_frame(video_id=4, start_frame=250, end_frame=300):
+    """
+    Trouve une frame où L-BFGS-B performe mal comparé à Adam.
+    
+    Args:
+        video_id: ID de la vidéo à analyser
+        start_frame: Frame de début
+        end_frame: Frame de fin
+        
+    Returns:
+        dict: Informations sur la frame la plus problématique
+    """
+    print(f"\n{'='*80}")
+    print(f"RECHERCHE DE FRAME PROBLÉMATIQUE")
+    print(f"Video ID: {video_id}, Frames: {start_frame}-{end_frame}")
+    print(f"{'='*80}")
+    
+    # Load data
+    npz_path = get_flows_dir() / f"{video_id}_float16.npz"
+    if not npz_path.exists():
+        print(f"❌ File not found: {npz_path}")
+        return None
+    
+    with np.load(npz_path) as data:
+        flows_data = data['flow'][start_frame:end_frame]
+    
+    gt_pixels = read_ground_truth_pixels(video_id)[start_frame+1:end_frame+1]
+    
+    problem_frames = []
+    
+    # Test each frame
+    for i, (flow_data, gt_point) in enumerate(zip(flows_data, gt_pixels)):
+        frame_idx = start_frame + i
+        print(f"\nTesting frame {frame_idx}...")
+        
+        # Convert to MLX for filtering
+        flow_mx = mx.array(flow_data, dtype=mx.float32)
+        
+        # Apply filtering
+        filter_config = {
+            'filtering': {
+                'norm': {'is_used': True, 'min_threshold': 13},
+                'colinearity': {'is_used': True, 'min_threshold': 0.96}
+            },
+            'weighting': {
+                'norm': {'is_used': False},
+                'colinearity': {'is_used': False}
+            }
+        }
+        flow_filter = FlowFilterBatch(filter_config)
+        filtered_flow_batch, weights_batch = flow_filter.filter_and_weight(flow_mx[None, :, :, :])
+        
+        # Extract single filtered flow
+        filtered_flow = filtered_flow_batch[0]
+        weights = weights_batch[0] if weights_batch is not None else None
+        
+        # Convert back to numpy for L-BFGS-B
+        filtered_flow_np = np.array(filtered_flow)
+        weights_np = np.array(weights) if weights is not None else None
+        
+        # Test L-BFGS-B
+        seq_estimator = CollinearityScorer()
+        lbfgs_optimizer = LBFGSOptimizer(max_iter=100, display_warnings=False)
+        
+        start_time = time.time()
+        lbfgs_point = lbfgs_optimizer.optimize_single(filtered_flow_np, weights=weights_np)
+        lbfgs_time = time.time() - start_time
+        
+        lbfgs_score = seq_estimator.colin_score(filtered_flow_np, lbfgs_point, weights=weights_np)
+        lbfgs_distance = np.sqrt((lbfgs_point[0] - gt_point[0])**2 + 
+                                (lbfgs_point[1] - gt_point[1])**2)
+        
+        # Test Adam
+        par_estimator = BatchCollinearityScorer()
+        adam_optimizer = AdamOptimizer(plateau_threshold=0, plateau_patience=3)
+        
+        start_time = time.time()
+        adam_points = adam_optimizer.optimize_batch(filtered_flow_batch)
+        adam_time = time.time() - start_time
+        
+        adam_point = adam_points[0]
+        adam_score = float(par_estimator.colin_score(filtered_flow, adam_point, weights=weights))
+        adam_distance = np.sqrt((float(adam_point[0]) - gt_point[0])**2 + 
+                               (float(adam_point[1]) - gt_point[1])**2)
+        
+        # Calculate performance gap (positive = Adam better)
+        distance_gap = lbfgs_distance - adam_distance
+        score_gap = adam_score - lbfgs_score
+        
+        frame_info = {
+            'frame_idx': frame_idx,
+            'lbfgs': {
+                'point': lbfgs_point,
+                'score': float(lbfgs_score),
+                'distance_to_gt': float(lbfgs_distance),
+                'time': lbfgs_time
+            },
+            'adam': {
+                'point': (float(adam_point[0]), float(adam_point[1])),
+                'score': adam_score,
+                'distance_to_gt': float(adam_distance),
+                'time': adam_time
+            },
+            'gaps': {
+                'distance_gap': float(distance_gap),  # Positive = Adam better
+                'score_gap': float(score_gap),        # Positive = Adam better
+            },
+            'flow_data': flow_data,
+            'filtered_flow': filtered_flow_np,
+            'weights': weights_np,
+            'gt_point': gt_point
+        }
+        
+        # Consider this frame problematic if Adam significantly outperforms L-BFGS-B
+        if distance_gap > 15 and score_gap > 0.0001:  # Adam at least 15 pixels better + better score
+            problem_frames.append(frame_info)
+            print(f"  📍 PROBLEMATIC FRAME FOUND!")
+            print(f"     L-BFGS-B: {lbfgs_distance:.1f} px, score {lbfgs_score:.6f}")
+            print(f"     Adam: {adam_distance:.1f} px, score {adam_score:.6f}")
+            print(f"     Gap: {distance_gap:.1f} px, score diff {score_gap:.6f}")
+        else:
+            print(f"  ✅ Frame {frame_idx}: L-BFGS {lbfgs_distance:.1f}px vs Adam {adam_distance:.1f}px (gap: {distance_gap:.1f})")
+        
+        # Memory cleanup
+        gc.collect()
+    
+    if not problem_frames:
+        print(f"\n❌ Aucune frame problématique trouvée dans la plage {start_frame}-{end_frame}")
+        return None
+    
+    # Sort by distance gap (most problematic first)
+    problem_frames.sort(key=lambda x: x['gaps']['distance_gap'], reverse=True)
+    
+    print(f"\n{'='*80}")
+    print(f"FRAMES PROBLÉMATIQUES TROUVÉES: {len(problem_frames)}")
+    print(f"{'='*80}")
+    
+    for i, frame_info in enumerate(problem_frames[:5]):  # Show top 5
+        gap = frame_info['gaps']['distance_gap']
+        score_gap = frame_info['gaps']['score_gap']
+        print(f"{i+1}. Frame {frame_info['frame_idx']}: Adam {gap:.1f}px better, score +{score_gap:.6f}")
+    
+    # Return the most problematic frame
+    best_frame = problem_frames[0]
+    print(f"\n🎯 FRAME LA PLUS PROBLÉMATIQUE: {best_frame['frame_idx']}")
+    print(f"   L-BFGS-B: {best_frame['lbfgs']['distance_to_gt']:.1f}px, score {best_frame['lbfgs']['score']:.6f}")
+    print(f"   Adam: {best_frame['adam']['distance_to_gt']:.1f}px, score {best_frame['adam']['score']:.6f}")
+    print(f"   Amélioration Adam: {best_frame['gaps']['distance_gap']:.1f}px, score +{best_frame['gaps']['score_gap']:.6f}")
+    
+    return best_frame
+
+
 if __name__ == "__main__":
     print(f"🚀 BENCHMARK L-BFGS-B vs ADAM")
     print(f"{'='*80}")
     
-    # Test rapide sur une frame
-    print(f"\n1️⃣ Test rapide sur une frame...")
-    npz_path = get_flows_dir() / "3_float16.npz"
-    with np.load(npz_path) as data:
-        flow_data = data['flow'][0]
+    # Recherche de frame problématique sur vidéo 4, frames 250-300
+    print(f"\n🔍 Recherche de frame problématique...")
+    problematic_frame = find_problematic_frame(video_id=4, start_frame=250, end_frame=300)
     
-    gt_pixels = read_ground_truth_pixels(3)[1]
-    single_result = benchmark_single_frame(flow_data, gt_pixels, 0)
-    
-    # Test sur plusieurs frames
-    print(f"\n2️⃣ Test sur plusieurs frames...")
-    multi_result = benchmark_multiple_frames(num_frames=5, video_id=3)
-    
-    print(f"\n✅ Benchmark terminé !")
-    print(f"\n💡 CONCLUSIONS:")
-    
-    if multi_result:
-        summary = multi_result['summary']
-        lbfgs_acc = summary['lbfgs']['mean_distance']
-        adam_acc = summary['adam']['mean_distance']
-        speedup = summary['lbfgs']['mean_time'] / summary['adam']['mean_time']
+    if problematic_frame:
+        print(f"\n📊 Analyse détaillée de la frame {problematic_frame['frame_idx']}...")
+        detailed_result = benchmark_single_frame(
+            problematic_frame['flow_data'], 
+            problematic_frame['gt_point'], 
+            problematic_frame['frame_idx']
+        )
+    else:
+        print(f"\n⚠️  Aucune frame problématique trouvée, test sur frames par défaut...")
+        # Test rapide sur une frame
+        print(f"\n1️⃣ Test rapide sur une frame...")
+        npz_path = get_flows_dir() / "3_float16.npz"
+        with np.load(npz_path) as data:
+            flow_data = data['flow'][0]
         
-        print(f"  • Précision: {'Adam' if adam_acc < lbfgs_acc else 'L-BFGS-B'} gagne")
-        print(f"  • Vitesse: Adam {speedup:.1f}x plus rapide")
-        print(f"  • Recommandation: {'Adam pour production' if speedup > 1.5 and abs(adam_acc - lbfgs_acc) < 5 else 'L-BFGS-B pour précision maximale'}") 
+        gt_pixels = read_ground_truth_pixels(3)[1]
+        single_result = benchmark_single_frame(flow_data, gt_pixels, 0)
+        
+        # Test sur plusieurs frames
+        print(f"\n2️⃣ Test sur plusieurs frames...")
+        multi_result = benchmark_multiple_frames(num_frames=5, video_id=3)
+        
+        print(f"\n✅ Benchmark terminé !")
+        print(f"\n💡 CONCLUSIONS:")
+        
+        if multi_result:
+            summary = multi_result['summary']
+            lbfgs_acc = summary['lbfgs']['mean_distance']
+            adam_acc = summary['adam']['mean_distance']
+            speedup = summary['lbfgs']['mean_time'] / summary['adam']['mean_time']
+            
+            print(f"  • Précision: {'Adam' if adam_acc < lbfgs_acc else 'L-BFGS-B'} gagne")
+            print(f"  • Vitesse: Adam {speedup:.1f}x plus rapide")
+            print(f"  • Recommandation: {'Adam pour production' if speedup > 1.5 and abs(adam_acc - lbfgs_acc) < 5 else 'L-BFGS-B pour précision maximale'}") 

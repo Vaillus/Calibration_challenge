@@ -41,10 +41,10 @@ def load_distances_with_frame_info(video_id, run_name="vanilla"):
             
         # Convert angles to pixels
         pitch_gt, yaw_gt = gt_data[i]
-        x_gt, y_gt = angles_to_pixels(pitch_gt, yaw_gt, DEFAULT_FOCAL_LENGTH, IMAGE_WIDTH, IMAGE_HEIGHT)
+        x_gt, y_gt = angles_to_pixels(pitch_gt, yaw_gt)
         
         pitch_pred, yaw_pred = pred_data[i]
-        x_pred, y_pred = angles_to_pixels(pitch_pred, yaw_pred, DEFAULT_FOCAL_LENGTH, IMAGE_WIDTH, IMAGE_HEIGHT)
+        x_pred, y_pred = angles_to_pixels(pitch_pred, yaw_pred)
         
         # Calculate distance
         distance = np.sqrt((x_gt - x_pred)**2 + (y_gt - y_pred)**2)
@@ -164,7 +164,7 @@ def select_random_frames_from_7th_decile(run_name="5", n_frames=10) -> List[Tupl
     
     return [(int(vid), int(frame)) for vid, frame in selected_frames]
 
-def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_id=None) -> List[Tuple[int, int]]:
+def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_id=None, seed=None) -> List[Tuple[int, int]]:
     """
     Sélectionne n frames aléatoires d'un décile spécifique de la distribution des distances.
     
@@ -193,7 +193,9 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
         
         if distances is not None and len(distances) > 0:
             for dist, frame_id in zip(distances, frame_indices):
-                all_distances_with_coords.append((dist, vid_id, frame_id))
+                # Exclure frame_id = 0
+                if frame_id != 0:
+                    all_distances_with_coords.append((dist, vid_id, frame_id))
     
     if not all_distances_with_coords:
         print("❌ Aucune distance calculée!")
@@ -213,7 +215,7 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
     frames_in_decile = [
         (int(vid_id), int(frame_id)) 
         for dist, vid_id, frame_id in all_distances_with_coords
-        if percentile_start <= dist <= percentile_end
+        if (percentile_start <= dist <= percentile_end) and (frame_id <1193)
     ]
     
     # print(f"🎯 {len(frames_in_decile)} frames dans le {decile}ème décile")
@@ -223,6 +225,8 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
         return frames_in_decile
     
     # 4. Sélectionner aléatoirement
+    if seed is not None:
+        random.seed(seed)
     selected_frames = random.sample(frames_in_decile, n_frames)
     
     # print(f"✅ {n_frames} frames sélectionnés aléatoirement:")
@@ -231,7 +235,7 @@ def select_frames_from_decile(run_name="vanilla", decile=7, n_frames=10, video_i
     
     return selected_frames
 
-def select_frames_from_all_deciles(run_name="vanilla", n_frames_per_decile=5, video_id=None) -> dict:
+def select_frames_from_all_deciles(run_name="vanilla", n_frames_per_decile=5, video_id=None, seed=None) -> dict:
     """
     Sélectionne n frames aléatoires de chacun des 10 déciles de la distribution des distances.
     
@@ -255,7 +259,8 @@ def select_frames_from_all_deciles(run_name="vanilla", n_frames_per_decile=5, vi
             run_name=run_name,
             decile=decile,
             n_frames=n_frames_per_decile,
-            video_id=video_id
+            video_id=video_id,
+            seed=seed
         )
         all_frames.extend(frames)
     

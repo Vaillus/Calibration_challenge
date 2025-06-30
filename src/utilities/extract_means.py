@@ -66,15 +66,15 @@ def convert_angles_to_pixels(angles_data: np.ndarray) -> np.ndarray:
     return np.array(pixels_data)
 
 
-def process_video_predictions(video_num: int = 5) -> None:
+def process_video_predictions(run_name: str = "5") -> None:
     """Traite les prédictions d'une vidéo spécifique.
     
     Args:
         video_num: Numéro de la vidéo à traiter (défaut: 5)
     """
     # Utilisation des fonctions de chemins centralisées
-    pred_dir = get_pred_dir(video_num)
-    output_dir = ensure_dir_exists(get_means_dir(video_num))
+    pred_dir = get_pred_dir(run_name)
+    output_dir = ensure_dir_exists(get_means_dir(run_name))
     
     # Fichiers à traiter (0 à 4)
     file_numbers = range(5)
@@ -121,7 +121,7 @@ def process_video_predictions(video_num: int = 5) -> None:
 
 def main():
     """Fonction principale."""
-    process_video_predictions(video_num=5)
+    process_video_predictions(run_name="8")
 
 
 if __name__ == "__main__":

@@ -41,11 +41,11 @@ def read_ground_truth_pixels(video_index: int, focal_length: float=DEFAULT_FOCAL
     Returns:
         List of tuples (x, y) in pixels
     """
-    gt_angles, image_width, image_height = read_ground_truth_angles(video_index)
+    gt_angles = read_ground_truth_angles(video_index)
     gt_pixels = []
     
     for pitch, yaw in gt_angles:
-        x, y = angles_to_pixels(pitch, yaw, focal_length, image_width, image_height)
+        x, y = angles_to_pixels(pitch, yaw, focal_length)
         gt_pixels.append((x, y))
         
     return gt_pixels
@@ -98,7 +98,7 @@ def main():
     
     try:
         # Test get_frame_pixels
-        x, y = get_frame_pixels(video_index, frame_index, focal_length)
+        x, y = get_frame_pixel(video_index, frame_index, focal_length)
         print(f"Pixel coordinates for video {video_index}, frame {frame_index}:")
         print(f"x = {x}, y = {y}")
         

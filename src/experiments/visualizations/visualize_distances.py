@@ -117,7 +117,7 @@ def plot_single_video_distances(video_id, run_name="vanilla"):
     plt.xlabel('Frame Number')
     plt.ylabel('Distance (pixels)')
     plt.grid(True, alpha=0.3)
-    plt.ylim(0, 300)  # Set fixed Y-axis limit
+    plt.ylim(0, 150)  # Set fixed Y-axis limit
     
     # Add statistics (excluding zero distances)
     if len(valid_distances) > 0:
@@ -184,7 +184,7 @@ def plot_all_videos_comparison(run_name="vanilla"):
                     if len(segment) > 0:  # Only plot non-empty segments
                         ax.plot(segment[:, 0], segment[:, 1], color=color, linewidth=0.6, alpha=0.8)
             
-            ax.set_ylim(0, 300)  # Set fixed Y-axis limit
+            ax.set_ylim(0, 150)  # Set fixed Y-axis limit
             
             # Calculate mean excluding zero distances
             if len(valid_distances) > 0:
@@ -291,7 +291,7 @@ def compare_runs(run1="vanilla", run2="1"):
                         if len(segment) > 0:
                             ax.plot(segment[:, 0], segment[:, 1], color=color2, label=f'{run2}', alpha=0.7, linewidth=0.8)
                 
-                ax.set_ylim(0, 300)  # Set fixed Y-axis limit
+                ax.set_ylim(0, 150)  # Set fixed Y-axis limit
                 
                 # Add means (excluding zero distances)
                 if len(valid_distances1) > 0:
@@ -524,4 +524,4 @@ def main(run_name="5"):
             print("Invalid choice. Please enter 0-6.")
 
 if __name__ == "__main__":
-    main("5_4") 
+    main("8") 

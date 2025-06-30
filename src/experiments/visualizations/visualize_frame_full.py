@@ -51,7 +51,7 @@ def load_frame_data(run_name: str, video_idx: int, frame_idx: int) -> Tuple:
     _, frame_rgb = read_frame_rgb(video_path, frame_idx)
     
     # Load flow data
-    flow_data = load_flows(video_idx, start_frame=frame_idx, end_frame=frame_idx)
+    flow_data = load_flows(video_idx, start_frame=frame_idx-1, end_frame=frame_idx-1)
     flow_data = flow_data[0]  # Remove batch dimension
     
     # Load ground truth
@@ -67,16 +67,17 @@ def load_frame_data(run_name: str, video_idx: int, frame_idx: int) -> Tuple:
     # Apply simple filtering (min_threshold=13 only)
     filter_config = {
         'norm': {'is_used': True, 'k': 150, 'x0': 13},
-        'colinearity': {'is_used': False, 'k': 150, 'x0': 0.96},
+        'colinearity': {'is_used': True, 'k': 150, 'x0': 0.96},
         'heatmap': {'is_used': False}
     }
     
     flow_filter = FlowFilterSample(filter_config)
     filtered_flow = flow_filter.filter(flow_data)
+    unfiltered_flow, weights = flow_filter.filter_and_weight(flow_data)
     
     print(f"✅ Données chargées - GT: ({gt_point[0]:.1f}, {gt_point[1]:.1f}), Pred: ({pred_point[0]:.1f}, {pred_point[1]:.1f})")
     
-    return frame_rgb, flow_data, filtered_flow, gt_point, pred_point, center_point
+    return frame_rgb, flow_data, filtered_flow, unfiltered_flow, weights, gt_point, pred_point, center_point
 
 
 def compute_colinearity_for_points(
@@ -216,7 +217,7 @@ def plot_collinearity_scores(ax, frame_rgb: np.ndarray, filtered_flow: np.ndarra
     ax.axis('off')
 
 
-def plot_optimizer_trajectory(ax, filtered_flow: np.ndarray, 
+def plot_optimizer_trajectory(ax, flow: np.ndarray, weights: np.ndarray,
                             gt_point: Tuple[float, float], pred_point: Tuple[float, float],
                             center_point: Tuple[float, float], video_idx: int, frame_idx: int, 
                             image_shape: Tuple[int, int]):
@@ -226,16 +227,18 @@ def plot_optimizer_trajectory(ax, filtered_flow: np.ndarray,
     print("🚀 Lancement optimisation Adam...")
     
     # Convert to MLX for Adam optimizer
-    flow_mx = mx.array(filtered_flow, dtype=mx.float32)
+    flow_mx = mx.array(flow, dtype=mx.float32)
+    weights_mx = mx.array(weights, dtype=mx.float32)
     
     # Run Adam optimization with default parameters
-    adam_optimizer = AdamOptimizer()
-    start_point = mx.array([filtered_flow.shape[1] // 2, filtered_flow.shape[0] // 2], dtype=mx.float32)
+    adam_optimizer = AdamOptimizer(plateau_threshold=0.0001, plateau_patience=10, pixel_patience=0)
+    start_point = mx.array([flow.shape[1] // 2, flow.shape[0] // 2], dtype=mx.float32)
     
     start_time = time.time()
     adam_point = adam_optimizer.optimize_single(
         flow_mx,
         starting_point=start_point,
+        weights=weights_mx,
         save_trajectories=True
     )
     adam_time = time.time() - start_time
@@ -263,7 +266,7 @@ def plot_optimizer_trajectory(ax, filtered_flow: np.ndarray,
     
     for i in range(len(x)):
         for j in range(len(y)):
-            Z[j, i] = estimator.colin_score(filtered_flow, (X[j, i], Y[j, i]), step=5)
+            Z[j, i] = estimator.colin_score(flow, (X[j, i], Y[j, i]), step=5, weights=weights)
     
     # Plot topological map
     contour = ax.contourf(X, Y, Z, levels=15, cmap='viridis', alpha=0.7)
@@ -308,11 +311,11 @@ def visualize_frame_full(run_name: str, video_idx: int = 1, frame_idx: int = 201
         video_idx: Index de la vidéo
         frame_idx: Index de la frame
     """
-    print(f"🎯 VISUALISATION COMPLÈTE - Vidéo {video_idx}, Frame {frame_idx}")
+    print(f"🎯 VISUALISATION COMPLÈTE - Run: {run_name}, Vidéo {video_idx}, Frame {frame_idx}")
     print("=" * 60)
-    
+    # print(f"Run: {run_name}, Video: {video_idx}, Frame: {frame_idx}")
     # Load frame data
-    frame_rgb, flow_data, filtered_flow, gt_point, pred_point, center_point = load_frame_data(run_name, video_idx, frame_idx)
+    frame_rgb, flow_data, filtered_flow, unfiltered_flow, weights, gt_point, pred_point, center_point = load_frame_data(run_name, video_idx, frame_idx)
     
     # Create figure with 3 subplots
     fig, axes = plt.subplots(1, 3, figsize=(20, 7))
@@ -324,7 +327,7 @@ def visualize_frame_full(run_name: str, video_idx: int = 1, frame_idx: int = 201
     plot_collinearity_scores(axes[1], frame_rgb, filtered_flow, gt_point, pred_point, center_point, video_idx, frame_idx)
     
     # Plot 3: Optimizer trajectory
-    plot_optimizer_trajectory(axes[2], filtered_flow, gt_point, pred_point, center_point, video_idx, frame_idx, flow_data.shape)
+    plot_optimizer_trajectory(axes[2], unfiltered_flow, weights, gt_point, pred_point, center_point, video_idx, frame_idx, flow_data.shape)
     
     plt.tight_layout()
     plt.show()
@@ -353,7 +356,7 @@ def visualize_worst_errors_sequential(run_name="vanilla", k=10):
             print(f"{'='*60}")
             
             # Appel de la fonction de visualisation de base
-            visualize_frame_full(video_idx=video_id, frame_idx=frame_id)
+            visualize_frame_full(run_name=run_name, video_idx=video_id, frame_idx=frame_id)
             
             # Pause entre les visualisations si pas la dernière
             # if i < len(worst_errors_coords) - 1:
@@ -364,7 +367,7 @@ def visualize_worst_errors_sequential(run_name="vanilla", k=10):
     except Exception as e:
         print(f"❌ Erreur lors de la récupération des pires erreurs: {e}")
         print("Retour à la visualisation par défaut...")
-        visualize_frame_full(video_idx=1, frame_idx=201)
+        visualize_frame_full(run_name=run_name, video_idx=1, frame_idx=201)
 
 
 
@@ -390,13 +393,13 @@ def visualize_random_7th_decile_frames(run_name="5"):
         #         print("Arrêt de la visualisation.")
         #         break
 
-def main():
+def main(video_idx: int = 1, frame_idx: int = 202):
     """
     Fonction principale - choix entre visualisation par défaut, pires erreurs ou 7ème décile.
     """
     print("🎯 VISUALISATION COMPLÈTE DE FRAMES")
     print("=" * 60)
-    print("1. Visualisation par défaut (Vidéo 1, Frame 201)")
+    print(f"1. Visualisation d'une frame (Vidéo {video_idx}, Frame {frame_idx})")
     print("2. Visualiser les pires erreurs séquentiellement")
     print("3. Visualiser 10 frames aléatoires du 7ème décile")
     print("=" * 60)
@@ -421,12 +424,10 @@ def main():
         visualize_random_7th_decile_frames(run_name)
     else:
         # Configuration par défaut
-        VIDEO_IDX = 1
-        FRAME_IDX = 202
-        run_name = "5_3"
-        print(f"📊 Visualisation par défaut: Vidéo {VIDEO_IDX}, Frame {FRAME_IDX}")
-        visualize_frame_full(run_name=run_name, video_idx=VIDEO_IDX, frame_idx=FRAME_IDX)
+        run_name = "5_4"
+        print(f"📊 Visualisation d'une frame: Vidéo {video_idx}, Frame {frame_idx}")
+        visualize_frame_full(run_name=run_name, video_idx=video_idx, frame_idx=frame_idx)
 
 
 if __name__ == "__main__":
-    main() 
+    main(video_idx=3, frame_idx=119) 

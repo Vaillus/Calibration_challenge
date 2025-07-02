@@ -153,8 +153,8 @@ class VideoProcessor:
         output_file = pred_run_dir / f"{video_index}.txt"
         
         with open(output_file, 'w') as f:
-            for yaw, pitch in self.results:
-                f.write(f"{yaw:.6f} {pitch:.6f}\n")
+            for pitch, yaw in self.results:
+                f.write(f"{pitch:.6f} {yaw:.6f}\n")
         
         print(f"💾 Prédictions: {output_file}")
 
@@ -252,8 +252,8 @@ class VideoProcessor:
         x, y = self._predict_vanishing_point(flow, combined_mask, weights)
         
         # Conversion angles et stockage
-        yaw, pitch = pixels_to_angles(x, y)
-        self._store_result(x, y, yaw, pitch)
+        pitch, yaw = pixels_to_angles(x, y)
+        self._store_result(x, y, pitch, yaw)
         
         # Mise à jour état
         self.prev_gray = gray
@@ -286,9 +286,9 @@ class VideoProcessor:
         else:
             raise ValueError(f"Méthode inconnue: {self.config['prediction_method']}")
 
-    def _store_result(self, x: int, y: int, yaw: float, pitch: float) -> None:
+    def _store_result(self, x: int, y: int, pitch: float, yaw: float) -> None:
         """Stocke le résultat de prédiction."""
-        self.results.append([yaw, pitch])
+        self.results.append([pitch, yaw])
 
 
 

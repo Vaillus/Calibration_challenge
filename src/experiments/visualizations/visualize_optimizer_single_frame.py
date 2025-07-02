@@ -16,7 +16,7 @@ import numpy as np
 import mlx.core as mx
 import matplotlib.pyplot as plt
 
-from src.utilities.ground_truth import read_ground_truth_pixels
+from src.utilities.load_ground_truth import read_ground_truth_pixels
 from src.utilities.paths import get_flows_dir, get_labeled_dir
 from src.utilities.load_video_frame import read_frame_rgb
 from src.core.flow_filter import FlowFilterBatch

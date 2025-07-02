@@ -5,7 +5,7 @@ import os
 # Imports absolus propres grâce à pip install -e .
 from src.core.segmentation import VehicleDetector
 from src.core.flow import calculate_flow, find_separation_points
-from src.utilities.ground_truth import read_ground_truth_pixels, read_ground_truth_angles
+from src.utilities.load_ground_truth import read_ground_truth_pixels, read_ground_truth_angles
 from src.core.rendering import (
     create_control_panel,
     visualize_flow_arrows,

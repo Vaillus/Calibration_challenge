@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import cv2
 import os
 
-from src.utilities.ground_truth import get_frame_pixel
+from src.utilities.load_ground_truth import get_frame_pixel
 from src.utilities.paths import get_labeled_dir, get_flows_dir
 from src.utilities.load_video_frame import read_frame_rgb
 from src.utilities.load_flows import load_flows

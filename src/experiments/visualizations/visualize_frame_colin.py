@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Tuple, Union, Optional
 import numpy.typing as npt
 
-from src.utilities.ground_truth import get_frame_pixel
+from src.utilities.load_ground_truth import get_frame_pixel
 from src.utilities.paths import get_labeled_dir, get_flows_dir
 from src.utilities.load_video_frame import read_frame_rgb
 from src.core.flow_filter import FlowFilterSample

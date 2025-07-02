@@ -20,7 +20,7 @@ import mlx.core as mx
 import matplotlib.pyplot as plt
 from typing import Tuple, Optional
 
-from src.utilities.ground_truth import get_frame_pixel, read_ground_truth_pixels
+from src.utilities.load_ground_truth import get_frame_pixel, read_ground_truth_pixels
 from src.utilities.paths import get_labeled_dir, get_flows_dir, get_pred_dir
 from src.utilities.load_video_frame import read_frame_rgb
 from src.utilities.load_flows import load_flows

@@ -20,7 +20,7 @@ from pathlib import Path
 import gc
 
 # Imports absolus
-from src.utilities.ground_truth import read_ground_truth_pixels
+from src.utilities.load_ground_truth import read_ground_truth_pixels
 from src.core.optimizers import AdamOptimizer
 
 

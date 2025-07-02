@@ -29,7 +29,7 @@ from pathlib import Path
 
 # Imports absolus du projet
 from src.utilities.load_flows import load_flows
-from src.utilities.ground_truth import read_ground_truth_pixels
+from src.utilities.load_ground_truth import read_ground_truth_pixels
 from src.core.optimizers import AdamOptimizer, LBFGSOptimizer
 from src.core.flow_filter import FlowFilterBatch
 

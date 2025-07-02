@@ -30,7 +30,7 @@ from src.utilities.paths import (
     ensure_dir_exists,
     get_intermediate_dir
 )
-from src.utilities.ground_truth import read_ground_truth_pixels, read_ground_truth_angles
+from src.utilities.load_ground_truth import read_ground_truth_pixels, read_ground_truth_angles
 from src.core.flow_filter import FlowFilterBatch
 from src.utilities.pixel_angle_converter import pixels_to_angles
 from src.core.optimizers import AdamOptimizer

@@ -16,7 +16,7 @@ import mlx.core as mx
 from pathlib import Path
 import gc
 
-from src.utilities.ground_truth import read_ground_truth_pixels
+from src.utilities.load_ground_truth import read_ground_truth_pixels
 from src.utilities.paths import get_flows_dir
 from src.core.flow_filter import FlowFilterBatch
 from src.core.collinearity_scorer_batch import BatchCollinearityScorer

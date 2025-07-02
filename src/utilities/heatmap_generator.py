@@ -51,7 +51,7 @@ class HeatmapGenerator:
             print(f"   📍 Chargement des labels pour vidéo {video_id}...")
             
             # Utiliser la fonction existante qui convertit déjà en pixels
-            from src.utilities.ground_truth import read_ground_truth_pixels
+            from src.utilities.load_ground_truth import read_ground_truth_pixels
             labels_pixels = read_ground_truth_pixels(video_id)
             
             if len(labels_pixels) == 0:

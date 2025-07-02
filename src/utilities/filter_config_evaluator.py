@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from src.utilities.paths import get_pred_dir, get_means_dir, get_intermediate_dir
 from src.utilities.load_flows import load_flows
-from src.utilities.ground_truth import read_ground_truth_pixels
+from src.utilities.load_ground_truth import read_ground_truth_pixels
 from src.core.flow_filter import FlowFilterBatch
 from src.core.optimizers import AdamOptimizer
 from src.utilities.pixel_angle_converter import angles_to_pixels
@@ -36,18 +36,17 @@ class FrameBatch:
 class DataLoader:
     """Chargement optimisé de données pour les benchmarks de filtrage"""
     
-    def __init__(self, run_name: str = "5", verbose: bool = True):
+    def __init__(self, baseline_pred_gen: str = "5", means_gen: str = "5",  verbose: bool = True):
         """
         Args:
             baseline_pred_gen: Génération de prédictions baseline
             verbose: Affichage des messages de progression
         """
-        self.run_name = run_name
         self.verbose = verbose
         
         # Paths
-        self.baseline_pred_dir = get_pred_dir(run_name)
-        self.means_dir = get_means_dir(run_name)
+        self.baseline_pred_dir = get_pred_dir(baseline_pred_gen)
+        self.means_dir = get_means_dir(means_gen)
     
     def load_frame_batch(self, data_source: Union[int, List[Tuple[int, int]], str]) -> FrameBatch:
         """
@@ -309,7 +308,8 @@ class FilterConfigEvaluator:
     """
     
     def __init__(self, data_source: Union[int, List[Tuple[int, int]], str], 
-                 baseline_pred_gen: str = "5", verbose: bool = True):
+                 baseline_pred_gen: str = "5_4", means_gen: str = "5_4", verbose: bool = True,
+                 optimization_criterion: str = "mean_distances"):
         """
         Args:
             data_source: 
@@ -318,10 +318,20 @@ class FilterConfigEvaluator:
                 - 'all': toutes les vidéos disponibles
             baseline_pred_gen: Génération de prédictions baseline (default: 5)
             verbose: Affichage des messages
+            optimization_criterion: Critère d'optimisation
+                - 'mean_distances': moyenne des distances individuelles (défaut)
+                - 'distance_between_means': distance entre les points moyens
         """
         self.data_source = data_source
         self.baseline_pred_gen = baseline_pred_gen
         self.verbose = verbose
+        self.means_gen = means_gen
+        
+        # Validation du critère d'optimisation
+        valid_criteria = ['mean_distances', 'distance_between_means']
+        if optimization_criterion not in valid_criteria:
+            raise ValueError(f"optimization_criterion doit être dans {valid_criteria}, reçu: {optimization_criterion}")
+        self.optimization_criterion = optimization_criterion
         
         # Données chargées (sera un FrameBatch après load_data)
         self.data_batch: Optional[FrameBatch] = None
@@ -330,7 +340,7 @@ class FilterConfigEvaluator:
         """
         Charge toutes les données via le DataLoader.
         """
-        loader = DataLoader(self.baseline_pred_gen, self.verbose)
+        loader = DataLoader(self.baseline_pred_gen, self.means_gen, self.verbose)
         self.data_batch = loader.load_frame_batch(self.data_source)
     
     @property
@@ -430,7 +440,7 @@ class FilterConfigEvaluator:
                               adam_config: dict = None,
                               verbose: bool = None) -> float:
         """
-        Évalue une configuration de filtre et retourne la distance moyenne.
+        Évalue une configuration de filtre selon le critère d'optimisation choisi.
         
         Args:
             filter_config: Configuration du filtre avec structure FlowFilter
@@ -439,14 +449,21 @@ class FilterConfigEvaluator:
             verbose: Afficher les détails (None = utilise self.verbose)
             
         Returns:
-            float: Distance moyenne entre prédictions et labels
+            float: Score selon le critère d'optimisation
+                - 'mean_distances': distance moyenne entre prédictions et labels
+                - 'distance_between_means': distance entre les points moyens
         """
         # Utiliser predict_from_config pour obtenir les prédictions
         predictions = self.predict_from_config(filter_config, use_mean_points, adam_config)
         
-        # Calculer les distances
-        distances = self.compute_distances(predictions)
-        mean_distance = float(mx.mean(distances))
+        # Calculer le score selon le critère choisi
+        if self.optimization_criterion == 'mean_distances':
+            distances = self.compute_distances(predictions)
+            score = float(mx.mean(distances))
+        elif self.optimization_criterion == 'distance_between_means':
+            score = self.compute_distance_between_means(predictions)
+        else:
+            raise ValueError(f"Critère non supporté: {self.optimization_criterion}")
         
         # Affichage optionnel des détails
         show_verbose = verbose if verbose is not None else self.verbose
@@ -454,9 +471,10 @@ class FilterConfigEvaluator:
             print(f"🎯 Config: norm={'✓' if filter_config.get('norm', {}).get('is_used', False) else '✗'}, "
                   f"colin={'✓' if filter_config.get('colinearity', {}).get('is_used', False) else '✗'}, "
                   f"heatmap={'✓' if filter_config.get('heatmap', {}).get('is_used', False) else '✗'}")
-            print(f"   Distance moyenne: {mean_distance:.2f}")
+            criterion_name = "Distance moyenne" if self.optimization_criterion == 'mean_distances' else "Distance entre moyennes"
+            print(f"   {criterion_name}: {score:.2f}")
         
-        return mean_distance
+        return score
 
     def compute_distances(self, predictions: mx.array) -> mx.array:
         """
@@ -476,6 +494,72 @@ class FilterConfigEvaluator:
         )
         mx.eval(distances)
         return distances
+
+    def compute_distance_between_means(self, predictions: mx.array) -> float:
+        """
+        Calcule la distance euclidienne entre les points moyens des prédictions et des labels,
+        calculée par vidéo puis moyennée (chaque vidéo a son propre point de fuite).
+        
+        Args:
+            predictions: Prédictions de forme (batch_size, 2)
+            
+        Returns:
+            float: Moyenne des distances entre moyennes par vidéo
+        """
+        if self.labels_data is None or self.data_batch is None:
+            raise ValueError("Données non chargées. Appelez load_data() d'abord.")
+        
+        # Grouper par video_id
+        video_distances = []
+        frame_metadata = self.data_batch.frame_metadata
+        
+        # Créer un dictionnaire pour grouper par video_id
+        videos_data = {}
+        for i, (video_id, frame_id) in enumerate(frame_metadata):
+            if video_id not in videos_data:
+                videos_data[video_id] = {'predictions': [], 'labels': [], 'indices': []}
+            videos_data[video_id]['indices'].append(i)
+        
+        # Calculer la distance pour chaque vidéo
+        for video_id, data in videos_data.items():
+            indices = mx.array(data['indices'])
+            
+            # Extraire prédictions et labels pour cette vidéo
+            video_predictions = mx.take(predictions, indices, axis=0)  # (n_frames_video, 2)
+            video_labels = mx.take(self.labels_data, indices, axis=0)  # (n_frames_video, 2)
+            
+            # Calculer les moyennes pour cette vidéo
+            mean_pred_video = mx.mean(video_predictions, axis=0)  # (2,)
+            mean_labels_video = mx.mean(video_labels, axis=0)     # (2,)
+            
+            # Distance euclidienne pour cette vidéo
+            video_distance = mx.sqrt(
+                mx.sum(mx.square(mean_pred_video - mean_labels_video))
+            )
+            mx.eval(video_distance)
+            video_distances.append(float(video_distance))
+        
+        # Retourner la moyenne des distances par vidéo
+        return sum(video_distances) / len(video_distances)
+
+    def compute_baseline_score(self) -> float:
+        """
+        Calcule le score baseline selon le critère d'optimisation choisi.
+        
+        Returns:
+            float: Score baseline
+                - 'mean_distances': moyenne des distances baseline individuelles
+                - 'distance_between_means': distance entre les moyennes baseline et labels
+        """
+        if self.baseline_predictions is None:
+            raise ValueError("Prédictions baseline non chargées. Appelez load_data() d'abord.")
+        
+        if self.optimization_criterion == 'mean_distances':
+            return float(mx.mean(self.baseline_distances))
+        elif self.optimization_criterion == 'distance_between_means':
+            return self.compute_distance_between_means(self.baseline_predictions)
+        else:
+            raise ValueError(f"Critère non supporté: {self.optimization_criterion}")
 
     def _print_config(self, config: dict, use_mean_points: bool = None, indent: str = ""):
         """Affiche une configuration de manière lisible."""
@@ -540,38 +624,56 @@ class FilterConfigEvaluator:
 if __name__ == "__main__":
     from src.utilities.worst_errors import select_frames_from_all_deciles
 
+    print("🧪 Test des deux critères d'optimisation")
+    print("=" * 50)
+
     frames_by_decile = select_frames_from_all_deciles(
-        run_name="5_4", 
-        n_frames_per_decile=10, 
-        # video_id=4
+        run_name="8", 
+        n_frames_per_decile=10,
+        seed=42
     )
 
-    fb = FilterConfigEvaluator(frames_by_decile, verbose=False)
-    fb.load_data()
-    # filter_config = {
-    #     'norm': {'is_used': True, 'k': 150, 'x0': 13},
-    #     'colinearity': {'is_used': True, 'k': 150, 'x0': 0.96},
-    #     'heatmap': {
-    #         'is_used': False, 
-    #         'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy',
-    #         'weight': 1.0
-    #     }
-    # }
     filter_config = {
-        'norm': {'is_used': True, 'k': -10.0, 'x0': 1.0},
-        'colinearity': {'is_used': True, 'k': 118.25, 'x0': 1.1053},
+        'norm': {'is_used': True, 'k': -10.0, 'x0': 0.79},
+        'colinearity': {'is_used': True, 'k': 134.72, 'x0': 1.0942},
         'heatmap': {
             'is_used': True,    
             'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy',
-            'weight': 0.79
+            'weight': 0.36
         }
     }
-    # Test de la nouvelle interface
-    mean_distance = fb.evaluate_filter_config(filter_config=filter_config, use_mean_points=False)
-    print(f"Distance moyenne: {mean_distance}")
-    
-    # Test avec les prédictions
-    # predictions = fb.predict_from_config(filter_config=filter_config, use_mean_points=True)
-    # print(f"Prédictions moyennes: {mx.mean(predictions)}")
 
+    # Test avec critère "mean_distances" (défaut)
+    print("\n📊 Critère: MOYENNE DES DISTANCES")
+    fb1 = FilterConfigEvaluator(frames_by_decile, baseline_pred_gen="5_4", means_gen="5_4", 
+                               verbose=False, optimization_criterion="mean_distances")
+    fb1.load_data()
+    
+    baseline1 = fb1.compute_baseline_score()
+    score1 = fb1.evaluate_filter_config(filter_config=filter_config, use_mean_points=True)
+    improvement1 = baseline1 - score1
+    
+    print(f"Baseline: {baseline1:.2f}")
+    print(f"Score optimisé: {score1:.2f}")
+    print(f"Amélioration: {improvement1:+.2f}")
+
+    # Test avec critère "distance_between_means"
+    print("\n🎯 Critère: DISTANCE ENTRE MOYENNES")
+    fb2 = FilterConfigEvaluator(frames_by_decile, baseline_pred_gen="5_4", means_gen="5_4", 
+                               verbose=False, optimization_criterion="distance_between_means")
+    fb2.load_data()
+    
+    baseline2 = fb2.compute_baseline_score()
+    score2 = fb2.evaluate_filter_config(filter_config=filter_config, use_mean_points=True)
+    improvement2 = baseline2 - score2
+    
+    print(f"Baseline: {baseline2:.2f}")
+    print(f"Score optimisé: {score2:.2f}")
+    print(f"Amélioration: {improvement2:+.2f}")
+
+    # Comparaison
+    print(f"\n📈 COMPARAISON")
+    print(f"Différence baseline: {abs(baseline1 - baseline2):.2f}")
+    print(f"Différence scores: {abs(score1 - score2):.2f}")
+    print(f"Critère le plus performant: {'Moyenne distances' if improvement1 > improvement2 else 'Distance entre moyennes'}")
     

@@ -215,6 +215,7 @@ def select_frames_from_decile(
         decile:int=7, 
         n_frames:int=10,
         seed:int=None,
+        verbose:bool=False
     ) -> List[Tuple[int, int]]:
     """
     En entrée, on a une liste de distances avec coordonnées (video_id, frame_id, distance).
@@ -253,7 +254,8 @@ def select_frames_from_decile(
     # print(f"🎯 {len(frames_in_decile)} frames dans le {decile}ème décile")
     
     if len(frames_in_decile) < n_frames:
-        print(f"⚠️  Seulement {len(frames_in_decile)} frames disponibles")
+        if verbose:
+            print(f"⚠️  Seulement {len(frames_in_decile)} frames disponibles")
         return frames_in_decile
     
     # 4. Sélectionner aléatoirement
@@ -292,7 +294,7 @@ def select_frames_from_all_deciles(
     """
     # 1. Calculer toutes les distances avec coordonnées
     distances_with_ids = load_valid_distances_mult_vids(
-        video_ids=[video_ids], run_name=run_name
+        video_ids=video_ids, run_name=run_name
     )
     distances = [d[0] for d in distances_with_ids]
 

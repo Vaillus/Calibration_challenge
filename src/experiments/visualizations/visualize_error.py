@@ -13,7 +13,7 @@ def visualize_temporal_errors(test_dir):
         test_dir (str): Run number (e.g., '5' for pred/5/)
     """
     gt_dir = get_labeled_dir()
-    pred_dir = get_pred_dir(int(test_dir))  # Use video_num parameter
+    pred_dir = get_pred_dir(test_dir)  # Use video_num parameter
     
     # Create figure with 5 subplots
     fig, axes = plt.subplots(5, 1, figsize=(10, 12))
@@ -88,6 +88,10 @@ def visualize_temporal_errors(test_dir):
                 
                 # Also adjust y-axis tick size
                 ax.tick_params(axis='y', labelsize=8)
+                
+                # Set y-axis to log scale for better visualization of error variations
+                ax.set_yscale('log')
+                ax.set_ylim(1, 10000)  # Adjust limits for log scale
             
         except Exception as e:
             print(f"Error processing video {i}: {str(e)}")
@@ -119,5 +123,5 @@ def visualize_temporal_errors(test_dir):
     plt.show()
 
 if __name__ == "__main__":
-    TEST_DIR = '5'  # This is now relative to pred directory
+    TEST_DIR = '5_4'  # This is now relative to pred directory
     visualize_temporal_errors(TEST_DIR)

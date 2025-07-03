@@ -465,85 +465,7 @@ class BayesianSearch(FilterConfigEvaluator):
         
         sys.stdout.flush() 
 
-if __name__ == "__main__":
-    # Configuration de la recherche bayésienne avec points de départ intelligents
-    print("🧠 LANCEMENT RECHERCHE BAYÉSIENNE AVANCÉE")
-    print("=" * 50)
-    
-    # Sélectionner frames aléatoires par décile
-    frames_by_decile = select_frames_from_all_deciles(run_name="8", n_frames_per_decile=10, seed=43)
-
-
-    # Initialisation
-    searcher = BayesianSearch(data_source=frames_by_decile, baseline_pred_gen="8", means_gen="8", verbose=True)
-    searcher.load_data()
-    
-    # Définition des ranges de recherche
-    param_ranges = {
-        'norm_k': (-10.0, 150.0),  # Élargi pour inclure 0.21
-        'norm_x0': (-10.0, 151.0),  # Élargi pour inclure 39.60
-        'colinearity_k': (50, 151.0),
-        'colinearity_x0': (0.9, 2.0),  # Élargi pour inclure 1.10
-        'heatmap_weight': (0.0, 1.0),
-        'use_mean_points': True  # Explore True ET False
-    }
-    
-    # Points de départ intelligents basés sur les résultats précédents
-    smart_configs = [
-        ({
-            'norm': {'is_used': True, 'k': 26.77, 'x0': 11.87},
-            'colinearity': {'is_used': True, 'k': 50.00, 'x0': 1.7631},
-            'heatmap': {'is_used': False}
-        }, True),
-        ({
-            'norm': {'is_used': True, 'k': -10.0, 'x0': 1.0},
-            'colinearity': {'is_used': True, 'k': 118.25, 'x0': 1.1053},
-            'heatmap': {
-                'is_used': True,    
-                'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy',
-                'weight': 0.79
-            }
-        }, True),
-        ({
-             'norm': {'is_used': True, 'k': 150.0, 'x0': 13},
-             'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
-             'heatmap': {'is_used': False}
-         }, True),  # use_mean_points=False
-        # Configuration "soft norm + hard colinearity" (meilleure de la recherche précédente)
-        ({
-            'norm': {'is_used': True, 'k': 0.21, 'x0': 39.60},  # Vraies valeurs trouvées
-            'colinearity': {'is_used': True, 'k': 95.56, 'x0': 0.96},
-            'heatmap': {'is_used': False}
-        }, False),  
-        ({
-            'norm': {'is_used': True, 'k': 150.0, 'x0': 10.37},
-            'colinearity': {'is_used': True, 'k': 150.0, 'x0': 1.1566},
-            'heatmap': {'is_used': False}
-        }, False),
-    ({
-        'norm': {'is_used': True, 'k': 15.13, 'x0': 18.18},
-        'colinearity': {'is_used': True, 'k': 94.77, 'x0': 1.3723},
-        'heatmap': {'is_used': True, 'weight': 0.87, 'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy'}
-    }, False)
-    ]
-    
-    print(f"🎯 Utilisation de {len(smart_configs)} configurations de départ intelligentes")
-    print("🔍 Exploration des paramètres heatmap ET mean points")
-    print("📚 Réutilisation automatique de l'historique précédent")
-    
-    # Lancement de la recherche avec historique
-    results = searcher.search(
-        param_ranges=param_ranges,
-        n_calls=1000,  # Moins d'évaluations car on réutilise l'historique
-        n_initial_points=80,  # Moins de points aléatoires
-        acq_func='EI',  # Expected Improvement
-        initial_configs=smart_configs,
-        search_heatmap=True,  # Activer recherche heatmap
-        search_mean_points=True,  # Activer recherche mean points
-        use_previous_results=True,  # Utiliser l'historique
-        max_previous_points=100  # Charger jusqu'à 100 points précédents
-    )
-    
+def print_results(results):
     print(f"\n🏁 Recherche terminée !")
     print(f"💾 Meilleure amélioration: {results['best_improvement']:+.2f}")
     print(f"📚 Points précédents utilisés: {results.get('previous_points_used', 0)}")
@@ -578,3 +500,87 @@ if __name__ == "__main__":
             print(f"   → Image center reste meilleur de {best_mean_false['improvement'] - best_mean_true['improvement']:+.2f}")
         else:
             print(f"   → Mean points est meilleur de {best_mean_true['improvement'] - best_mean_false['improvement']:+.2f}")
+
+
+
+if __name__ == "__main__":
+    # Configuration de la recherche bayésienne avec points de départ intelligents
+    print("🧠 LANCEMENT RECHERCHE BAYÉSIENNE AVANCÉE")
+    print("=" * 50)
+    
+    # Sélectionner frames aléatoires par décile
+    frames_by_decile = select_frames_from_all_deciles(run_name="8", n_frames_per_decile=10, seed=43)
+
+
+    # Initialisation
+    searcher = BayesianSearch(data_source=frames_by_decile, baseline_pred_gen="5_4", means_gen="5_4", verbose=True)
+    searcher.load_data()
+    
+    eps = 1e-6
+    # Définition des ranges de recherche
+    param_ranges = {
+        'norm_k': (-10.0, 150.0),  # Élargi pour inclure 0.21
+        'norm_x0': (-10.0, 151.0),  # Élargi pour inclure 39.60
+        'colinearity_k': (150.0-eps, 150.0+eps),
+        'colinearity_x0': (0.96-eps, 0.96+eps),  # Élargi pour inclure 1.10
+        'heatmap_weight': (0.0, 1.0),
+        'use_mean_points': True  # Explore True ET False
+    }
+    
+    # Points de départ intelligents basés sur les résultats précédents
+    smart_configs = [
+    #     ({
+    #         'norm': {'is_used': True, 'k': 26.77, 'x0': 11.87},
+    #         'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
+    #         'heatmap': {'is_used': False}
+    #     }, True),
+    #     ({
+    #         'norm': {'is_used': True, 'k': -10.0, 'x0': 1.0},
+    #         'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
+    #         'heatmap': {
+    #             'is_used': True,    
+    #             'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy',
+    #             'weight': 0.79
+    #         }
+    #     }, True),
+    #     ({
+    #          'norm': {'is_used': True, 'k': 150.0, 'x0': 13},
+    #          'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
+    #          'heatmap': {'is_used': False}
+    #      }, True),  # use_mean_points=False
+    #     # Configuration "soft norm + hard colinearity" (meilleure de la recherche précédente)
+    #     ({
+    #         'norm': {'is_used': True, 'k': 0.21, 'x0': 39.60},  # Vraies valeurs trouvées
+    #         'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
+    #         'heatmap': {'is_used': False}
+    #     }, False),  
+    #     ({
+    #         'norm': {'is_used': True, 'k': 150.0, 'x0': 10.37},
+    #         'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
+    #         'heatmap': {'is_used': False}
+    #     }, False),
+    # ({
+    #     'norm': {'is_used': True, 'k': 15.13, 'x0': 18.18},
+    #     'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
+    #     'heatmap': {'is_used': True, 'weight': 0.87, 'path': get_intermediate_dir() / 'heatmaps/unfiltered/global/global_heatmap.npy'}
+    # }, False)
+    ]
+    
+    print(f"🎯 Utilisation de {len(smart_configs)} configurations de départ intelligentes")
+    print("🔍 Exploration des paramètres heatmap ET mean points")
+    print("📚 Réutilisation automatique de l'historique précédent")
+    
+    # Lancement de la recherche avec historique
+    results = searcher.search(
+        param_ranges=param_ranges,
+        n_calls=1000,  # Moins d'évaluations car on réutilise l'historique
+        n_initial_points=250,  # Moins de points aléatoires
+        acq_func='gp_hedge', 
+        initial_configs=smart_configs,
+        search_heatmap=True,  # Activer recherche heatmap
+        search_mean_points=True,  # Activer recherche mean points
+        use_previous_results=True,  # Utiliser l'historique
+        max_previous_points=250  # Charger jusqu'à 100 points précédents
+    )
+
+    print_results(results)

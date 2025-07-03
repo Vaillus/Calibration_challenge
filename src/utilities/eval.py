@@ -150,5 +150,5 @@ def main(dir_name: str):
         print("\n❌ Evaluation failed")
 
 if __name__ == "__main__":
-    dir_name = "7"
+    dir_name = "5_5"
     main(dir_name) 

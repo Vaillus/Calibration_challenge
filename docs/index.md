@@ -81,8 +81,10 @@ La méthode repose sur une observation fondamentale : dans un mouvement en ligne
 
 L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc correspondre à l'épipole.
 
-![[Pasted image 20250423102523.png]]
-![[Pasted image 20250423102542.png]]
+![Séparation verticale](./imgs/1/sep_vertical.png)
+
+![Séparation horizontale](./imgs/1/sep_horizontal.png)
+
 Isolons la méthode pour trouver l'axe de séparation vertical:
 
 1. Pour chaque colonne $j$, je calcule la moyenne des composantes horizontales des vecteurs :
@@ -108,14 +110,14 @@ J'ai notamment identifié plusieurs éléments qui handicapent gravement la pré
 ## Problèmes identifiés avec la méthode précédente
 Avec la méthode précédente basée uniquement sur le flux optique, certaines frames donnent des résultats acceptables, mais l'ensemble est très bruité. Dans certains cas, l'algorithme échoue complètement comme on peut le voir dans ces exemples:
 <div style="display: flex; justify-content: space-between;">
-  <img src="Pasted image 20250501104446.png" style="width: 48%;" />
-  <img src="Pasted image 20250501104516.png" style="width: 48%;" />
+  <img src="./imgs/2/sep_real_1.png" style="width: 48%;" />
+  <img src="./imgs/2/sep_heatm_1.png" style="width: 48%;" />
 </div>
 **Exemple 1 - Le capot de la voiture:** On observe ici que le capot de la voiture reflète le décor, créant des vecteurs qui pointent vers le haut alors qu'ils sont situés en bas de l'image. Cela pousse artificiellement la ligne de séparation horizontale vers le haut, faussant complètement l'estimation de l'épipole.
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="Pasted image 20250501104643.png" style="width: 48%;" />
-  <img src="Pasted image 20250501104705.png" style="width: 48%;" />
+  <img src="./imgs/2/sep_real_2.png" style="width: 48%;" />
+  <img src="./imgs/2/sep_heatm_2.png" style="width: 48%;" />
 </div>
 **Exemple 2 - Véhicules en mouvement:** Dans ce second cas, c'est une camionnette qui double notre voiture qui crée des vecteurs orientés vers la droite alors qu'ils sont situés à gauche de l'écran. La ligne de séparation verticale se retrouve alors collée à l'extrémité gauche, produisant une estimation aberrante.
 
@@ -140,7 +142,7 @@ J'ai été initialement attiré par les capacités de SAM 2, mais j'ai rapidemen
 
 J'ai donc opté pour YOLOv8-seg, qui s'est avéré rapide et globalement efficace pour la détection et la segmentation des véhicules:
 
-![[Pasted image 20250501105415.png]]
+![YOLOv8-seg](./imgs/2/yolo_seg.png)
 ### Segmentation manuelle du capot
 Un problème persistait cependant: YOLOv8 ne détecte pas le capot de la voiture, puisqu'il n'est pas entraîné pour cette tâche spécifique. J'ai donc développé rapidement une interface simple me permettant de segmenter manuellement le capot sur la première frame de chaque vidéo. Cette segmentation manuelle est ensuite appliquée à toutes les frames de la vidéo correspondante.
 ## Résultats et amélioration des performances
@@ -227,9 +229,13 @@ Il faut donc que je trouve un moyen d'accélérer drastiquement l'évaluation de
 ### Optimisation par module
 #### Retour sur la pipeline de prédiction
 Pour trouver l'épipole sur une frame, ma méthode actuelle suit une pipeline séquentielle en trois modules :
-![[Pasted image 20250709115002.png]]
+
+![Pipeline](./imgs/4/pipeline.png)
+
 **Module 1 : Génération du flux optique** - À partir de deux frames consécutives, je calcule le champ de vecteurs de flux optique avec l'algorithme de Farneback d'OpenCV, puis j'applique la segmentation pour éliminer les vecteurs correspondant aux véhicules en mouvement et au capot de la voiture.
+
 **Module 2 : Filtrage des vecteurs** - J'applique des critères de sélection (seuil de norme, score de colinéarité) pour ne conserver que les vecteurs les plus informatifs pour l'estimation de l'épipole.
+
 **Module 3 : Optimisation** - J'applique une descente de gradient pour minimiser le score de colinéarité présenté au troisième arc, ce qui me donne les coordonnées finales de notre estimation de l'épipole pour une frame.
 
 Dans cette section, nous suivrons mon cheminement visant à accélérer chacun de ces trois modules.
@@ -404,7 +410,7 @@ Cette approche visait à découvrir des patterns géométriques récurrents auto
 ##### Résultats obtenus
 **Heatmaps absolues par vidéo (Approche 1) :**
 Sur l'image suivante on peut voir la moyenne des scores de collinéarité par vidéo en coordonnées absolues :
-![[Pasted image 20250613183356.png]]
+![Heatmap absolue par vidéo](./imgs/5/abs_heatm_per_video.png)
 Observations :
 - Des motifs se répètent : en bas de chaque image, une région blanche correspond au masque du capot de la voiture où les scores n'ont pas été calculés
 - Des rais jaunes se distinguent nettement sous le point central des images 0, 1 et 4
@@ -412,12 +418,13 @@ Observations :
 
 **Heatmap absolue globale (Approche 1) :**
 Sur l'image suivante, on peut voir la moyenne des scores de collinéarité par pixel absolu, sur l'ensemble des vidéos :
-![[Pasted image 20250614113131.png]]
+![Heatmap absolue globale](./imgs/5/abs_heatm_global.png)
 Un motif clair similaire à celui apparaissant sur les images 0, 1 et 4 apparaît sur l'image globale.
 
 **Heatmap relative globale (Approche 2) :**
 J'ai également implémenté et testé cette approche pour voir si elle révélerait des patterns plus informatifs que l'approche absolue:
-![[Pasted image 20250614110934.png]]
+![Heatmap relative globale](./imgs/5/rel_heatm_global.png)
+
 On observe que les patterns sont beaucoup moins nets que dans l'approche absolue. Par conséquent, j'ai décidé de conserver l'approche de la heatmap absolue globale pour la suite.
 ##### Utilisation de la heatmap absolue pour le filtrage
 J'ai implémenté l'utilisation de cette heatmap absolue comme masque de coefficients lors du filtrage des vecteurs. L'idée est de donner plus d'importance aux vecteurs situés dans les régions qui ont historiquement de bons scores de collinéarité, et moins d'importance à ceux dans les régions moins informatives. 
@@ -436,7 +443,8 @@ Cette approche présente plusieurs avantages :
 
 Validation des résultats
 La figure ci-dessous illustre la différence entre différentes approches sur une frame représentative :
-![[Pasted image 20250616101507.png]]
+![Early stopping](./imgs/5/optimizers_comp.png)
+
 On observe clairement que L-BFGS-B et Adam couplé avec l'ancienne méthode d'early stopping s'arrêtait prématurément, loin du minimum global, tandis que le nouveau critère permet d'atteindre la convergence optimale. Cette amélioration de la précision d'optimisation constitue une base solide pour les raffinements ultérieurs du filtrage des vecteurs.
 ## Partie 2 : Post-processing
 Depuis le 3ème arc de ce projet, j'observe que mes prédictions d'épipole, bien qu'améliorées à chaque itération, restent très bruitées et bénéficieraient probablement d'un lissage en post-processing. J'ai décidé de garder cette optimisation pour la fin du projet comme "cerise sur le gâteau" pour un petit bonus de performance.

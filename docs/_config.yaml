@@ -5,7 +5,7 @@ url: "https://ton-username.github.io"
 
 markdown: kramdown
 highlighter: rouge
-theme: minima  # ou un autre thème
+theme: minimal-mistakes-jekyll
 
 plugins:
   - jekyll-feed

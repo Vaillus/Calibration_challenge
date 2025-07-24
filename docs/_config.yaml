@@ -3,9 +3,12 @@ description: "Description de ton contenu"
 baseurl: "/nom-de-ton-repo"
 url: "https://ton-username.github.io"
 
+# Utilise remote_theme au lieu de theme
+remote_theme: mmistakes/minimal-mistakes
+
 markdown: kramdown
 highlighter: rouge
-theme: minimal-mistakes-jekyll
 
 plugins:
   - jekyll-feed
+  - jekyll-include-cache  # nécessaire pour minimal-mistakes

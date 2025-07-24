@@ -1,0 +1,11 @@
+title: "Titre de ton blog/article"
+description: "Description de ton contenu"
+baseurl: "/nom-de-ton-repo"
+url: "https://ton-username.github.io"
+
+markdown: kramdown
+highlighter: rouge
+theme: minima  # ou un autre thème
+
+plugins:
+  - jekyll-feed

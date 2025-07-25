@@ -17,6 +17,9 @@ Un challenge en particulier a attiré mon attention, bien qu'il ait été publi�
 ## Le problème à résoudre
 Dans les voitures équipées du système Openpilot, le téléphone de l'utilisateur sert de caméra principale. Contrairement aux Tesla où les caméras sont fixées à des positions précises, chaque installation d'Openpilot est unique : le téléphone peut être placé à différentes positions, avec différentes orientations.
 Pour que le système d'assistance à la conduite fonctionne correctement, il doit comprendre comment la caméra (téléphone) est orientée par rapport à la voiture. C'est ce qu'on appelle la calibration de caméra.
+
+![Openpilot](https://miro.medium.com/v2/resize:fit:1400/1*_oAenBeOAbrtmOOuVVnSfg.jpeg){: style="width: 90%;"}
+
 ## L'objectif
 Ce challenge demande de développer un algorithme qui, à partir d'une vidéo prise par le téléphone pendant la conduite, peut déterminer dans quelle direction la voiture se déplace par rapport à l'orientation de la caméra.
 
@@ -39,6 +42,8 @@ Avec la distance focale donnée de 910 pixels, on peut établir une relation dir
 Pour résoudre ce problème, j'ai accès à 10 vidéos d'une minute chacune, soit environ 1200 frames.
 5 vidéos sont labellisées avec les angles corrects déjà identifiés, et 5 vidéos sont non labellisées.
 Chaque vidéo montre des conditions de conduite différentes (environnement, luminosité, etc.)
+![Exemples de frames des vidéos](./imgs/intro/videos.gif){: style="width: 90%;"}
+
 [insérer une figure avec des exemples de frames]
 ## Critère d'évaluation
 Les prédictions sont évaluées sur une échelle où 0% correspond à une prédiction parfaite et 100% correspond au score qu'on obtient en prédisant simplement le centre de l'image. Plus le score est élevé, plus l'erreur est importante.

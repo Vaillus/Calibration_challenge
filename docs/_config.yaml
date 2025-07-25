@@ -14,3 +14,18 @@ highlighter: rouge
 plugins:
   - jekyll-feed
   - jekyll-include-cache  # nécessaire pour minimal-mistakes
+
+# Inclure les dossiers d'assets
+include:
+  - imgs
+
+# Garder les assets lors du build
+keep_files:
+  - imgs
+
+# Extensions statiques autorisées
+static_files:
+  - "*.gif"
+  - "*.png"
+  - "*.jpg"
+  - "*.jpeg"

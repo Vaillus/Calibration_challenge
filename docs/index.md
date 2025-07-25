@@ -42,7 +42,11 @@ Avec la distance focale donnée de 910 pixels, on peut établir une relation dir
 Pour résoudre ce problème, j'ai accès à 10 vidéos d'une minute chacune, soit environ 1200 frames.
 5 vidéos sont labellisées avec les angles corrects déjà identifiés, et 5 vidéos sont non labellisées.
 Chaque vidéo montre des conditions de conduite différentes (environnement, luminosité, etc.)
-![Aperçu des 9 vidéos du dataset](./imgs/intro/videos.gif){: style="width: 90%;"}
+<figure>
+  <img src="./imgs/intro/videos.gif" alt="Aperçu des 9 vidéos du dataset" style="width: 90%;" />
+  <figcaption>Aperçu des 9 vidéos du dataset</figcaption>
+</figure>
+
 ## Critère d'évaluation
 Les prédictions sont évaluées sur une échelle où 0% correspond à une prédiction parfaite et 100% correspond au score qu'on obtient en prédisant simplement le centre de l'image. Plus le score est élevé, plus l'erreur est importante.
 ## Stratégies considérées

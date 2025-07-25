@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page.title }} - {{ site.title }}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        .toc-sidebar {
+            position: sticky;
+            top: 2rem;
+            max-height: calc(100vh - 4rem);
+            overflow-y: auto;
+            padding: 1.5rem;
+            background: #f8f9fa;
+            border-radius: 0.5rem;
+            margin-top: 2rem;
+            border: 1px solid #dee2e6;
+        }
+        
+        .toc-sidebar h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #495057;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 0.5rem;
+        }
+        
+        .toc-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .toc-list a {
+            display: block;
+            padding: 0.5rem 0;
+            color: #6c757d;
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            padding-left: 1rem;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+        
+        .toc-list a:hover {
+            color: #007bff;
+            border-left-color: #007bff;
+        }
+        
+        .toc-list a.active {
+            color: #007bff;
+            font-weight: 600;
+            border-left-color: #007bff;
+            background: rgba(0, 123, 255, 0.1);
+        }
+        
+        /* Styles pour différencier h1 et h2 */
+        .toc-list a.toc-h1 {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #495057;
+            margin-top: 0.5rem;
+        }
+        
+        .toc-list a.toc-h2 {
+            padding-left: 2.5rem;  /* Indentation pour les h2 */
+            font-size: 0.85rem;
+            color: #6c757d;
+            border-left-width: 2px;
+        }
+        
+        .toc-list a.toc-h1.active {
+            background: rgba(0, 123, 255, 0.15);
+        }
+        
+        .toc-list a.toc-h2.active {
+            background: rgba(0, 123, 255, 0.1);
+        }
+        
+        /* Animation pour les h2 qui apparaissent/disparaissent */
+        .toc-list li.h2-item {
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .toc-list li.h2-item.visible {
+            opacity: 1;
+            max-height: 50px;
+        }
+        
+        .main-content {
+            padding: 2rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .toc-sidebar {
+                position: relative;
+                order: -1;
+                margin-bottom: 2rem;
+                margin-top: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar TOC -->
+            <div class="col-md-3 col-lg-2">
+                <nav class="toc-sidebar">
+                    <h3>Sommaire</h3>
+                    <ul class="toc-list" id="toc-list">
+                        <!-- Le TOC sera généré ici -->
+                    </ul>
+                </nav>
+            </div>
+            
+            <!-- Contenu principal -->
+            <div class="col-md-9 col-lg-10">
+                <div class="main-content">
+                    <article>
+                        <header class="mb-4">
+                            <h1>{{ page.title }}</h1>
+                            {% if page.date %}
+                                <p class="text-muted">{{ page.date | date: "%d %B %Y" }}</p>
+                            {% endif %}
+                        </header>
+                        
+                        <div class="content" id="main-content">
+                            {{ content }}
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("Initialisation du TOC contextuel...");
+            
+            // Trouver tous les headers h1 et h2
+            const h1Headers = document.querySelectorAll('#main-content h1');
+            const h2Headers = document.querySelectorAll('#main-content h2');
+            const tocList = document.getElementById('toc-list');
+            
+            console.log("H1 trouvés:", h1Headers.length, "H2 trouvés:", h2Headers.length);
+            
+            if (h1Headers.length === 0) {
+                console.log("Aucun header h1 trouvé!");
+                tocList.innerHTML = '<li><em>Aucun titre trouvé</em></li>';
+                return;
+            }
+            
+            // Organiser les headers par sections
+            const sections = [];
+            
+            h1Headers.forEach((h1, index) => {
+                // Créer un ID si il n'en a pas
+                if (!h1.id) {
+                    h1.id = 'h1-' + index;
+                }
+                
+                const section = {
+                    h1: h1,
+                    h2s: []
+                };
+                
+                // Trouver tous les h2 qui suivent ce h1 jusqu'au prochain h1
+                let currentElement = h1.nextElementSibling;
+                const nextH1 = h1Headers[index + 1];
+                
+                while (currentElement && currentElement !== nextH1) {
+                    if (currentElement.tagName === 'H2') {
+                        if (!currentElement.id) {
+                            currentElement.id = 'h2-' + section.h2s.length + '-of-h1-' + index;
+                        }
+                        section.h2s.push(currentElement);
+                    }
+                    currentElement = currentElement.nextElementSibling;
+                }
+                
+                sections.push(section);
+            });
+            
+            console.log("Sections organisées:", sections);
+            
+            // Créer le TOC initial avec tous les h1
+            function createInitialTOC() {
+                tocList.innerHTML = '';
+                
+                sections.forEach((section, sectionIndex) => {
+                    // Ajouter le h1
+                    const h1Li = document.createElement('li');
+                    h1Li.className = 'h1-item';
+                    
+                    const h1A = document.createElement('a');
+                    h1A.href = '#' + section.h1.id;
+                    h1A.textContent = section.h1.textContent;
+                    h1A.className = 'toc-link toc-h1';
+                    h1A.dataset.sectionIndex = sectionIndex;
+                    
+                    h1Li.appendChild(h1A);
+                    tocList.appendChild(h1Li);
+                    
+                    // Ajouter les h2 de cette section (cachés au début)
+                    section.h2s.forEach((h2, h2Index) => {
+                        const h2Li = document.createElement('li');
+                        h2Li.className = 'h2-item';
+                        h2Li.dataset.sectionIndex = sectionIndex;
+                        
+                        const h2A = document.createElement('a');
+                        h2A.href = '#' + h2.id;
+                        h2A.textContent = h2.textContent;
+                        h2A.className = 'toc-link toc-h2';
+                        
+                        h2Li.appendChild(h2A);
+                        tocList.appendChild(h2Li);
+                    });
+                });
+            }
+            
+            // Fonction pour montrer/cacher les h2 d'une section
+            function showH2sForSection(activeSectionIndex) {
+                const allH2Items = document.querySelectorAll('.h2-item');
+                
+                allH2Items.forEach(item => {
+                    const itemSectionIndex = parseInt(item.dataset.sectionIndex);
+                    if (itemSectionIndex === activeSectionIndex) {
+                        item.classList.add('visible');
+                    } else {
+                        item.classList.remove('visible');
+                    }
+                });
+            }
+            
+            // ScrollSpy amélioré
+            function updateActiveLink() {
+                const links = document.querySelectorAll('.toc-link');
+                let currentSection = -1;
+                let currentH2 = '';
+                
+                // Trouver la section h1 active
+                sections.forEach((section, index) => {
+                    const rect = section.h1.getBoundingClientRect();
+                    if (rect.top <= 150) {
+                        currentSection = index;
+                    }
+                });
+                
+                // Si on est dans une section, trouver le h2 actif
+                if (currentSection >= 0) {
+                    sections[currentSection].h2s.forEach(h2 => {
+                        const rect = h2.getBoundingClientRect();
+                        if (rect.top <= 150) {
+                            currentH2 = h2.id;
+                        }
+                    });
+                }
+                
+                // Mettre à jour les classes active
+                links.forEach(link => {
+                    link.classList.remove('active');
+                });
+                
+                // Activer le h1 de la section courante
+                if (currentSection >= 0) {
+                    const h1Link = document.querySelector(`[data-section-index="${currentSection}"]`);
+                    if (h1Link) {
+                        h1Link.classList.add('active');
+                    }
+                    
+                    // Montrer les h2 de cette section
+                    showH2sForSection(currentSection);
+                    
+                    // Activer le h2 courant si il y en a un
+                    if (currentH2) {
+                        const h2Link = document.querySelector(`[href="#${currentH2}"]`);
+                        if (h2Link) {
+                            h2Link.classList.add('active');
+                        }
+                    }
+                } else {
+                    // Aucune section active, cacher tous les h2
+                    showH2sForSection(-1);
+                }
+            }
+            
+            // Initialiser
+            createInitialTOC();
+            
+            // Détecter le scroll
+            window.addEventListener('scroll', updateActiveLink);
+            updateActiveLink(); // Initial
+            
+            console.log("TOC contextuel activé!");
+        });
+    </script>
+</body>
+</html>

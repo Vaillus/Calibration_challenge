@@ -1,10 +1,10 @@
 title: "Titre de ton blog/article"
 description: "Description de ton contenu"
-baseurl: "/nom-de-ton-repo"
-url: "https://ton-username.github.io"
+baseurl: "/calib_challenge"
+url: "https://Vaillus.github.io"
 
 # Utilise remote_theme au lieu de theme
-remote_theme: mmistakes/minimal-mistakes
+remote_theme: "mmistakes/minimal-mistakes@4.27.2"
 
 markdown: kramdown
 highlighter: rouge

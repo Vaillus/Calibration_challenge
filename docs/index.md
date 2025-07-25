@@ -1,9 +1,7 @@
 ---
-layout: default
 title: "Calibration de caméra embarquée dans une voiture semi-autonome"
+layout: dynamic_toc
 ---
-
-# Rapport de Projet : Challenge de Calibration de Caméra Embarquée dans une Voiture Semi-Autonome
 
 # Introduction
 Ce document a pour but de retracer mon cheminement dans ma quête de résoudre le challenge de calibration de d'une caméra embarquée dans une voiture semi-autonome. 

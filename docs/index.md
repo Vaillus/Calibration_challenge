@@ -42,7 +42,7 @@ Avec la distance focale donnée de 910 pixels, on peut établir une relation dir
 Pour résoudre ce problème, j'ai accès à 10 vidéos d'une minute chacune, soit environ 1200 frames.
 5 vidéos sont labellisées avec les angles corrects déjà identifiés, et 5 vidéos sont non labellisées.
 Chaque vidéo montre des conditions de conduite différentes (environnement, luminosité, etc.)
-![Aperçu des 9 vidéos du dataset](./imgs/intro/videos_optimized.gif){: style="width: 90%;"}
+![Aperçu des 9 vidéos du dataset](./imgs/intro/videos.gif){: style="width: 90%;"}
 ## Critère d'évaluation
 Les prédictions sont évaluées sur une échelle où 0% correspond à une prédiction parfaite et 100% correspond au score qu'on obtient en prédisant simplement le centre de l'image. Plus le score est élevé, plus l'erreur est importante.
 ## Stratégies considérées
@@ -72,8 +72,10 @@ Le package `opencv` propose deux méthodes principales pour calculer le flux o
 N'ayant pas de contrainte forte de temps de calcul et souhaitant mesurer le mouvement relatif global de l'environnement par rapport au véhicule, j'ai opté pour l'approche dense avec l'algorithme de Farnebäck. Cette méthode me permet d'obtenir un champ vectoriel complet qui représente le mouvement apparent entre deux frames consécutives.
 ### Visualisation
 J'ai donc implémenté le calcul du flux optique dense entre frames consécutives, ce qui produit un champ de vecteurs comme illustré ci-dessous :
-[ajouter l'image]
-![Exemple de champ de vecteurs de flux optique](app://59a80ec00f4b6d196c20b9705c534fa19210/Users/hugovaillaud/Documents/synced_vault/Pasted%20image%2020250501100017.png?1746086417112){: style="width: 90%;"}
+<figure>
+  <img src="./imgs/1/flow_vector_example.png" alt="Exemple de champ de vecteurs de flux optique" style="width: 90%;" />
+  <figcaption>Visualisation du champ de vecteurs de flux optique dense calculé entre deux frames consécutives</figcaption>
+</figure>
 
 Sur cette visualisation, chaque flèche représente le déplacement apparent d'un pixel entre deux frames. On peut observer que dans un scénario de déplacement en ligne droite, ces vecteurs semblent ou diverger depuis un point particulier - ça devrait être notre épipole.
 

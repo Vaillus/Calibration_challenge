@@ -1,6 +1,7 @@
 ---
 title: "Calibration de caméra embarquée dans une voiture semi-autonome"
 layout: dynamic_toc
+mathjax: true
 ---
 
 # Introduction
@@ -30,6 +31,7 @@ Pour décrire cette direction de déplacement de manière précise dans le réf�
 	- L'orientation horizontale fixe de la caméra par rapport à la voiture
 	- θ > 0 : la voiture tourne à droite
 	- θ < 0 : la voiture tourne à gauche
+
 ### L'épipole
 En vision par ordinateur, le point vers lequel la voiture se dirige est appelé "**épipole**". C'est le point où convergent les trajectoires des objets stationnaires lorsque la caméra se déplace en ligne droite. 
 Avec la distance focale donnée de 910 pixels, on peut établir une relation directe entre les angles (pitch et yaw) et les coordonnées (x,y) de ce point dans l'image.
@@ -67,7 +69,8 @@ Le package `opencv` propose deux méthodes principales pour calculer le flux o
 N'ayant pas de contrainte forte de temps de calcul et souhaitant mesurer le mouvement relatif global de l'environnement par rapport au véhicule, j'ai opté pour l'approche dense avec l'algorithme de Farnebäck. Cette méthode me permet d'obtenir un champ vectoriel complet qui représente le mouvement apparent entre deux frames consécutives.
 ### Visualisation
 J'ai donc implémenté le calcul du flux optique dense entre frames consécutives, ce qui produit un champ de vecteurs comme illustré ci-dessous :
-![Exemple de champ de vecteurs de flux optique](app://59a80ec00f4b6d196c20b9705c534fa19210/Users/hugovaillaud/Documents/synced_vault/Pasted%20image%2020250501100017.png?1746086417112)
+[ajouter l'image]
+![Exemple de champ de vecteurs de flux optique](app://59a80ec00f4b6d196c20b9705c534fa19210/Users/hugovaillaud/Documents/synced_vault/Pasted%20image%2020250501100017.png?1746086417112){: style="width: 90%;"}
 
 Sur cette visualisation, chaque flèche représente le déplacement apparent d'un pixel entre deux frames. On peut observer que dans un scénario de déplacement en ligne droite, ces vecteurs semblent ou diverger depuis un point particulier - ça devrait être notre épipole.
 
@@ -79,9 +82,9 @@ La méthode repose sur une observation fondamentale : dans un mouvement en ligne
 
 L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc correspondre à l'épipole.
 
-![Séparation verticale](./imgs/1/sep_vertical.png)
+![Séparation verticale](./imgs/1/sep_vertical.png){: style="width: 90%;"}
 
-![Séparation horizontale](./imgs/1/sep_horizontal.png)
+![Séparation horizontale](./imgs/1/sep_horizontal.png){: style="width: 90%;"}
 
 Isolons la méthode pour trouver l'axe de séparation vertical:
 
@@ -140,7 +143,7 @@ J'ai été initialement attiré par les capacités de SAM 2, mais j'ai rapidemen
 
 J'ai donc opté pour YOLOv8-seg, qui s'est avéré rapide et globalement efficace pour la détection et la segmentation des véhicules:
 
-![YOLOv8-seg](./imgs/2/yolo_seg.png)
+![YOLOv8-seg](./imgs/2/yolo_seg.png){: style="width: 90%;"}
 ### Segmentation manuelle du capot
 Un problème persistait cependant: YOLOv8 ne détecte pas le capot de la voiture, puisqu'il n'est pas entraîné pour cette tâche spécifique. J'ai donc développé rapidement une interface simple me permettant de segmenter manuellement le capot sur la première frame de chaque vidéo. Cette segmentation manuelle est ensuite appliquée à toutes les frames de la vidéo correspondante.
 ## Résultats et amélioration des performances
@@ -228,7 +231,7 @@ Il faut donc que je trouve un moyen d'accélérer drastiquement l'évaluation de
 #### Retour sur la pipeline de prédiction
 Pour trouver l'épipole sur une frame, ma méthode actuelle suit une pipeline séquentielle en trois modules :
 
-![Pipeline](./imgs/4/pipeline.png)
+![Pipeline](./imgs/4/pipeline.png){: style="width: 90%;"}
 
 **Module 1 : Génération du flux optique** - À partir de deux frames consécutives, je calcule le champ de vecteurs de flux optique avec l'algorithme de Farneback d'OpenCV, puis j'applique la segmentation pour éliminer les vecteurs correspondant aux véhicules en mouvement et au capot de la voiture.
 
@@ -408,7 +411,7 @@ Cette approche visait à découvrir des patterns géométriques récurrents auto
 ##### Résultats obtenus
 **Heatmaps absolues par vidéo (Approche 1) :**
 Sur l'image suivante on peut voir la moyenne des scores de collinéarité par vidéo en coordonnées absolues :
-![Heatmap absolue par vidéo](./imgs/5/abs_heatm_per_video.png)
+![Heatmap absolue par vidéo](./imgs/5/abs_heatm_per_video.png){: style="width: 90%;"}
 Observations :
 - Des motifs se répètent : en bas de chaque image, une région blanche correspond au masque du capot de la voiture où les scores n'ont pas été calculés
 - Des rais jaunes se distinguent nettement sous le point central des images 0, 1 et 4
@@ -416,12 +419,12 @@ Observations :
 
 **Heatmap absolue globale (Approche 1) :**
 Sur l'image suivante, on peut voir la moyenne des scores de collinéarité par pixel absolu, sur l'ensemble des vidéos :
-![Heatmap absolue globale](./imgs/5/abs_heatm_global.png)
+![Heatmap absolue globale](./imgs/5/abs_heatm_global.png){: style="width: 90%;"}
 Un motif clair similaire à celui apparaissant sur les images 0, 1 et 4 apparaît sur l'image globale.
 
 **Heatmap relative globale (Approche 2) :**
 J'ai également implémenté et testé cette approche pour voir si elle révélerait des patterns plus informatifs que l'approche absolue:
-![Heatmap relative globale](./imgs/5/rel_heatm_global.png)
+![Heatmap relative globale](./imgs/5/rel_heatm_global.png){: style="width: 90%;"}
 
 On observe que les patterns sont beaucoup moins nets que dans l'approche absolue. Par conséquent, j'ai décidé de conserver l'approche de la heatmap absolue globale pour la suite.
 ##### Utilisation de la heatmap absolue pour le filtrage
@@ -441,7 +444,7 @@ Cette approche présente plusieurs avantages :
 
 Validation des résultats
 La figure ci-dessous illustre la différence entre différentes approches sur une frame représentative :
-![Early stopping](./imgs/5/optimizers_comp.png)
+![Early stopping](./imgs/5/optimizers_comp.png){: style="width: 90%;"}
 
 On observe clairement que L-BFGS-B et Adam couplé avec l'ancienne méthode d'early stopping s'arrêtait prématurément, loin du minimum global, tandis que le nouveau critère permet d'atteindre la convergence optimale. Cette amélioration de la précision d'optimisation constitue une base solide pour les raffinements ultérieurs du filtrage des vecteurs.
 ## Partie 2 : Post-processing
@@ -456,7 +459,7 @@ Face à ce manque d'information, **mon algorithme se rabat sur une prédiction p
 **Définition des frames valides et notation**
 Pour le calcul des moyennes de lissage, je définis l'ensemble des **frames valides** $V$ comme l'ensemble des frames où le véhicule a une vitesse suffisamment élevée pour produire une estimation d'épipole fiable (c'est-à-dire différente du centre de l'image). 
 
-Pour clarifier les calculs de lissage, je note $p_1, p_2, ..., p_{|V|}$ la séquence des prédictions des frames valides **ordonnées temporellement**. Ainsi, $p_i$ correspond à la $i$-ème prédiction valide dans l'ordre chronologique, et $p_{i-1}$ désigne la prédiction valide qui la précède immédiatement. Ces prédictions ordonnées sont les seules utilisées dans les calculs de lissage, évitant ainsi de biaiser artificiellement les résultats vers le centre de l'écran.
+Pour clarifier les calculs de lissage, je note $p_1, p_2, \dots, p_{\|V\|}$ la séquence des prédictions des frames valides **ordonnées temporellement**. Ainsi, $p_i$ correspond à la $i$-ème prédiction valide dans l'ordre chronologique, et $p_{i-1}$ désigne la prédiction valide qui la précède immédiatement. Ces prédictions ordonnées sont les seules utilisées dans les calculs de lissage, évitant ainsi de biaiser artificiellement les résultats vers le centre de l'écran.
 
 #### Méthodes de lissage implémentées
 
@@ -481,9 +484,11 @@ Cette approche combine les avantages du lissage exponentiel dans les deux direct
 $$\tilde{p}_1^{forward} = p_1$$
 $$\forall j \in \{2, ..., i\} : \tilde{p}_j^{forward} := \alpha \cdot p_j + (1- \alpha) \cdot \tilde{p}_{j-1}^{forward}$$
 
-- Un lissage **régressif** (backward) : $\tilde{p}_{i}^{backward}$ calculé en appliquant la méthode de moyenne exponentielle en sens inverse, de la position $|V|$ jusqu'à la position $i$ :
+- Un lissage **régressif** (backward) : $\tilde{p}_{i}^{backward}$ calculé en appliquant la méthode de moyenne exponentielle en sens inverse, de la position $\|V\|$ jusqu'à la position $i$ :
+
 $$\tilde{p}_{|V|}^{backward} = p_{|V|}$$
-$$\forall j \in \{|V|-1, ..., i\} : \tilde{p}_j^{backward} := \alpha \cdot p_j + (1- \alpha) \cdot \tilde{p}_{j+1}^{backward}$$
+
+$$ \tilde{p}_j^{backward} := \alpha \cdot p_j + (1- \alpha) \cdot \tilde{p}_{j+1}^{backward} \forall j \in \{|V|-1, ..., i\}$$
 
 La prédiction finale combine ces deux estimations :
 $$\forall i \in \{1, ..., |V|\} : \tilde{p_i}^{bi} := \frac{\tilde{p}_{i}^{forward} + \tilde{p}_{i}^{backward}}{2}$$
@@ -549,7 +554,7 @@ Pour chaque expérience, on donne le score brut, puis le score lissé avec la mo
 
 Pour les moyennes exponentielles, j'ai optimisé le paramètre α par recherche unidimensionnelle. J'ai noté les valeurs optimales dans la dernière colonne.
 
-| Expérience | Score brut | Moyenne simple | Moyenne exponentielle bi-directionnelle | paramètre α |
+| Expérience | Score brut | Moyenne simple | Moyenne exponentielle bi-directionnelle | α |
 |------------|-------------|------------|----------------|----------------|
 | point de ref : centre | 39.47% | 18.29% | 17.63% | 0.01 |
 | point de ref : moyenne | 29.77% | 10.77% | **8.58%** | 0.05 |

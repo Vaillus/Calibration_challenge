@@ -91,9 +91,10 @@ La méthode repose sur une observation fondamentale : dans un mouvement en ligne
 
 L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc correspondre à l'épipole.
 
-![Séparation verticale](./imgs/1/sep_vertical.png){: style="width: 90%;"}
-
-![Séparation horizontale](./imgs/1/sep_horizontal.png){: style="width: 90%;"}
+<div style="display: flex; justify-content: space-between;">
+  <img src="./imgs/1/sep_vertical.png" style="width: 48%;" />
+  <img src="./imgs/1/sep_horizontal.png" style="width: 48%;" />
+</div>
 
 Isolons la méthode pour trouver l'axe de séparation vertical:
 
@@ -174,9 +175,14 @@ $$\hat{d}(p) = \frac{e - p}{\|e - p\|}$$
 $$s(p) = \hat{v}(p) \cdot \hat{d}(p)$$
 Ce produit scalaire vaut 1 si les vecteurs sont parfaitement alignés, 0 s'ils sont perpendiculaires, et -1 s'ils pointent dans des directions opposées.
 
+![Score de colinéarité](./imgs/3/collinearity_concept.gif){: style="width: 70%;"}
+
+
 Le score de colinéarité global pour un point candidat e est alors la moyenne de ces scores individuels :
 $$S(e) = \frac{1}{|P|} \sum_{p \in P} s(p)$$
 Où P est l'ensemble des pixels dans l'image.
+
+![Score de colinéarité global](./imgs/3/global_collinearity_score.gif){: style="width: 70%;"}
 
 Puisque les vecteurs de flux optique devraient pointer dans la direction opposée au vecteur allant du pixel à l'épipole (pour les objets stationnaires), l'objectif est de trouver le point $e^*$ qui minimise ce score :
 $$e^* = \arg\min_{e} S(e)$$
@@ -224,6 +230,7 @@ Pour cette première exploration, j'ai retenu les deux premiers critères - ils 
 ### Stratégies de filtrage
 J'ai ensuite considéré deux approches principales :
 **Filtrage adaptatif vs général** : Utiliser du machine learning pour trouver des paramètres spécifiques à chaque frame, ou trouver des paramètres qui fonctionnent bien en moyenne sur toutes les frames. Avec peu de données d'entraînement disponibles, j'ai opté pour la simplicité : des paramètres généraux.
+
 **Filtrage dur vs pondération** : Le filtrage dur élimine complètement certains vecteurs selon des critères binaires (ex: tous ceux de norme > 0.01), tandis que la pondération leur attribue des poids variables (ex: coefficient linéaire par rapport à leur score de colinéarité avec le centre). J'ai choisi de partir sur le filtrage dur en premier - plus simple à implémenter et à interpréter.
 ### Approche retenue
 Ma stratégie est donc claire : filtrage dur avec paramètres généraux, appliqué sur la norme des vecteurs et leur score de colinéarité avec le centre. L'étape suivante consiste à trouver les valeurs optimales de ces paramètres.
@@ -252,16 +259,17 @@ Dans cette section, nous suivrons mon cheminement visant à accélérer chacun d
 #### Module 1 : génération des champs de vecteurs de flux optique
 **Précalcul des champs de vecteurs**
 L'optimisation la plus évidente consiste à précalculer tous les champs de vecteurs de flux optique plutôt que de les recalculer à chaque test de paramètres de filtrage. 
+
 **Défis de stockage**
 Cette stratégie m'a rapidement confronté à un problème pratique : les 5 fichiers générés pesaient chacun 10 Go (encodage float32 par défaut), saturant complètement la mémoire de mon Mac.
+
 **Solution : quantification et compression**
 J'ai donc exploré la quantification des vecteurs pour réduire l'empreinte mémoire. Pour évaluer l'impact de cette quantification, j'ai calculé l'erreur angulaire introduite en passant de float32 à float16 sur l'ensemble des vecteurs, puis analysé cette erreur en fonction de la taille des vecteurs.
 Le résultat est rassurant : seuls les vecteurs appartenant aux plus petits déciles de la distribution des normes (c'est-à-dire les vecteurs de très faible amplitude) présentent une erreur angulaire supérieure à 1°. Or, ces vecteurs de faible amplitude sont précisément ceux qui sont les plus bruités d'après mes observations, et donc moins informatifs pour l'estimation de l'épipole. L'erreur introduite par la quantification devrait donc négligeable par rapport au bruit déjà présent dans ces vecteurs.
 En combinant cette quantification avec la compression .npz, j'ai obtenu 5 fichiers de ~3 Go chacun, soit une réduction de 70% de l'espace de stockage. Cependant, j'ai finalement conservé les versions float32 pour privilégier les performances et utilisé le format .npy pour éviter le temps de décompression.
+
 **Résultat**
 Cette optimisation élimine complètement le temps de calcul du module 1 lors des tests de paramètres, permettant de passer directement au filtrage des vecteurs précalculés.
-
-[ajouter quelque part le temps économisé ?] -> enfait, c'est optionnel.
 
 #### Module 2 : filtrage
 **Le défi de performance** Maintenant que j'avais ces tenseurs de flux optique précalculés (un tenseur par vidéo, dimensions : n_frames × height × width × 2), il fallait paralléliser le filtrage des vecteurs. Ces opérations, initialement traitées frame par frame, représentaient un goulot d'étranglement majeur dans ma pipeline lorsqu'appliquées sur des milliers de frames.
@@ -316,12 +324,12 @@ Cette stratégie garantit que l'échantillon contient à la fois des frames "fac
 L'évaluation des paramètres de filtrage sur ces 100 frames soigneusement sélectionnées ne prend plus que 2-3 secondes, permettant enfin une exploration efficace de l'espace des paramètres.
 ## Recherche des paramètres et résultats
 ### Stratégie de recherche des paramètres
-Une fois que j'avais une méthode d'évaluation enfin suffisamment rapide, il fallait choisir une stratégie pour explorer l'espace des paramètres de filtrage. Plusieurs approches s'offraient à moi :
+Une fois que j'avais une méthode d'évaluation suffisamment rapide, il fallait choisir une stratégie pour explorer l'espace des paramètres de filtrage. Plusieurs approches s'offraient à moi :
 
-**1. Exploration manuelle** : Recherche intuitive basée sur l'observation des résultats
-**2. Recherche exhaustive** : Balayage systématique d'un espace de paramètres restreint
-**3. Optimisation bayésienne** : Approche probabiliste pour guider la recherche.
-**4. Métaheuristiques** : Algorithmes génétiques ou autres méthodes évolutionnaires.
+1. **Exploration manuelle** : Recherche intuitive basée sur l'observation des résultats
+2. **Recherche exhaustive** : Balayage systématique d'un espace de paramètres restreint
+3. **Optimisation bayésienne** : Approche probabiliste pour guider la recherche.
+4. **Métaheuristiques** : Algorithmes génétiques ou autres méthodes évolutionnaires.
 
 J'ai privilégié les deux premières options pour leur **simplicité d'implémentation**, le fait qu'elles sont potentiellement suffisantes pour obtenir de bons résultats à ce stade du projet, et surtout parce que **l'espace de recherche se limite à seulement deux paramètres** (seuil de colinéarité et seuil de norme), ce qui rend l'exploration exhaustive et l'analyse visuelle parfaitement réalisables.
 

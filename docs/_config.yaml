@@ -1,7 +1,7 @@
 title: "Titre de ton blog/article"
 description: "Description de ton contenu"
-baseurl: "/calib_challenge"
-url: "https://Vaillus.github.io"
+baseurl: "/Calibration_challenge"  # ⬅️ Exact nom du repo
+url: "https://Vaillus.github.io" 
 
 # Utilise remote_theme au lieu de theme
 remote_theme: "mmistakes/minimal-mistakes@4.27.2"

@@ -126,7 +126,7 @@ J'ai notamment identifié plusieurs éléments qui handicapent gravement la pré
   <figcaption>Exemple de prédiction avec la méthode de l'arc 1</figcaption>
 </figure>
 
-# 2ème arc : la segmentation
+# 2ème arc : Segmentation
 ## Problèmes identifiés avec la méthode précédente
 Avec la méthode précédente basée uniquement sur le flux optique, certaines frames donnent des résultats acceptables, mais l'ensemble est très bruité. Dans certains cas, l'algorithme échoue complètement comme on peut le voir dans ces exemples:
 <div style="display: flex; justify-content: space-between;">
@@ -210,7 +210,7 @@ Pour améliorer la robustesse de mon estimation, j'ai donc décidé d'appliquer 
 ### Méthode d'optimisation
 En visualisant ce score pour différentes positions candidates, j'observe que la fonction présente généralement une forme concave après filtrage approprié:
 
-[figure ici]
+![Score de colinéarité global](./imgs/3/convex_function.png){: style="width: 70%;"}
 
 Cette observation m'a conduit à traiter ce problème comme une optimisation par descente de gradient - une approche naturelle pour trouver le minimum d'une fonction concave.
 

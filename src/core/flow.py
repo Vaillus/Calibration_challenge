@@ -76,14 +76,14 @@ def find_separation_points(flow, mask):
             row_means[i] = np.mean(flow_y[i, valid_pixels_in_row])
     
     # Trouver les indices valides
-    valid_x = np.abs(column_means) > 1e-2
-    valid_y = np.abs(row_means) > 1e-2
-    valid_x_indices = np.where(valid_x)[0]
-    valid_y_indices = np.where(valid_y)[0]
+    # valid_x = np.abs(column_means) > 1e-2
+    # valid_y = np.abs(row_means) > 1e-2
+    # valid_x_indices = np.where(valid_x)[0]
+    # valid_y_indices = np.where(valid_y)[0]
     
     # Trouver les points de séparation
-    best_x = _find_best_separation(column_means, valid_x_indices)
-    best_y = _find_best_separation(row_means, valid_y_indices)
+    best_x = _find_best_separation(column_means)
+    best_y = _find_best_separation(row_means)
     
     return best_x, best_y  
 
@@ -100,19 +100,20 @@ def _find_best_separation(means, valid_indices):
             best_pos: Position optimale de séparation
             best_score: Score de la meilleure séparation
     """
-    if len(valid_indices) == 0:
-        return None, 0
+    # if len(valid_indices) == 0:
+    #     return None, 0
     
     best_pos = None
     best_score = 0
 
-    for idx, i in enumerate(valid_indices[:-1]):
-        left = means[valid_indices[:idx+1]]
-        right = means[valid_indices[idx+1:]]
-        left_matches = np.sum(left < 0)
-        right_matches = np.sum(right > 0)
-        n = len(left) + len(right)
-        score = (left_matches + right_matches) / n if n > 0 else 0
+    for i in range(len(means)-1):
+        left = means[:i+1]
+        right = means[i+1:]
+        # left_matches = np.sum(left < 0)
+        # right_matches = np.sum(right > 0)
+        # n = len(left) + len(right)
+        # score = (left_matches + right_matches) / n if n > 0 else 0
+        score = sum(right) - sum(left)
         # Proportion de négatifs à gauche
         # left_ratio = np.sum(left < 0) / len(left) if len(left) > 0 else 0
         # # Proportion de positifs à droite

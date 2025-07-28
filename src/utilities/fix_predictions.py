@@ -33,6 +33,8 @@ Automatiquement appelé à la fin de make_predictions.py pour ajuster toutes les
 import os
 import numpy as np
 
+from src.utilities.paths import get_pred_dir, get_labeled_dir
+
 def fix_predictions(pred_dir='pred/3', gt_dir='labeled'):
     """
     Ajuste les prédictions pour qu'elles aient le même nombre de lignes que les ground truth
@@ -50,14 +52,19 @@ def fix_predictions(pred_dir='pred/3', gt_dir='labeled'):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     # Remonter d'un niveau pour atteindre le répertoire calib_challenge
     base_dir = os.path.dirname(script_dir)
+
+    pred_dir = get_pred_dir(pred_dir)
+    gt_dir = get_labeled_dir()
     
     # Pour chaque vidéo de 0 à 4
     for video_index in range(5):
-        pred_file = os.path.join(base_dir, pred_dir, f"{video_index}.txt")
-        gt_file = os.path.join(base_dir, gt_dir, f"{video_index}.txt")
+        pred_file = pred_dir / f"{video_index}.txt"
+        gt_file = gt_dir / f"{video_index}.txt"
         
         # Vérifier si les fichiers existent
         if not os.path.exists(pred_file) or not os.path.exists(gt_file):
+            print(f"pred_file: {pred_file}")
+            print(f"gt_file: {gt_file}")
             print(f"Fichiers manquants pour la vidéo {video_index}, passage à la suivante...")
             continue
         
@@ -83,5 +90,5 @@ def fix_predictions(pred_dir='pred/3', gt_dir='labeled'):
 
 # Si le script est exécuté directement
 if __name__ == "__main__":
-    pred_dir = 'pred/4/'
+    pred_dir = '2_new'
     fix_predictions(pred_dir=pred_dir)

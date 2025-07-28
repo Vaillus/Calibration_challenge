@@ -7,7 +7,7 @@ mathjax: true
 # Introduction
 Ce document a pour but de retracer mon cheminement dans ma quête de résoudre le challenge de calibration de d'une caméra embarquée dans une voiture semi-autonome. 
 ## Contexte
-Comma.ai est une entreprise qui cherche à démocratiser la conduite autonome. Là où Tesla vend des voitures complètes, comma.ai développe openpilot : un système open-source qui transforme votre voiture existante en véhicule semi-autonome.
+Comma.ai est une entreprise qui cherche à démocratiser la conduite autonome. Là où Tesla vend des voitures complètes, comma.ai développe Openpilot : un système open-source qui transforme votre voiture existante en véhicule semi-autonome.
 
 C'est une sorte d'équivalent d'Android face à iOS, mais pour les voitures.
 
@@ -15,13 +15,12 @@ Ils proposent un [ensemble de challenges publics](https://comma.ai/leaderboard) 
 
 Un challenge en particulier a attiré mon attention, bien qu'il ait été publié il y a quelques années et que le prix ait été remporté depuis longtemps. Il s'agit du challenge de calibration de caméra embarquée dans une voiture semi-autonome.
 ## Le problème à résoudre
-Dans les voitures équipées du système Openpilot, le téléphone de l'utilisateur sert de caméra principale. Contrairement aux Tesla où les caméras sont fixées à des positions précises, chaque installation d'Openpilot est unique : le téléphone peut être placé à différentes positions, avec différentes orientations.
-Pour que le système d'assistance à la conduite fonctionne correctement, il doit comprendre comment la caméra (téléphone) est orientée par rapport à la voiture. C'est ce qu'on appelle la calibration de caméra.
+Dans les voitures équipées du système Openpilot, un dispositif dédié comma.ai (comme le comma 3X) sert de caméra principale. Contrairement aux Tesla où les caméras sont fixées à des positions précises en usine, chaque installation d'Openpilot est unique : le dispositif peut être placé à différentes positions sur le pare-brise, avec différentes orientations. Pour que le système d'assistance à la conduite fonctionne correctement, il doit comprendre comment le dispositif et ses caméras sont orientés par rapport à la voiture. C'est ce qu'on appelle la calibration de caméra.
 
 ![Openpilot](https://miro.medium.com/v2/resize:fit:1400/1*_oAenBeOAbrtmOOuVVnSfg.jpeg){: style="width: 90%;"}
 
 ## L'objectif
-Ce challenge demande de développer un algorithme qui, à partir d'une vidéo prise par le téléphone pendant la conduite, peut déterminer dans quelle direction la voiture se déplace par rapport à l'orientation de la caméra.
+Ce challenge demande de développer un algorithme qui, à partir d'une vidéo prise par le dispositif comma.ai pendant la conduite, peut déterminer dans quelle direction la voiture se déplace par rapport à l'orientation de la caméra.
 
 Pour décrire cette direction de déplacement de manière précise dans le référentiel de la caméra, je dois prédire deux angles clés pour chaque image de la vidéo:
 - **Pitch (φ)** : L'angle vertical entre l'axe de la caméra et la direction de déplacement. Le pitch observable (φₒ) est influencé par :
@@ -63,12 +62,16 @@ Le flux optique présente plusieurs avantages qui m'ont convaincu d'explorer cet
 - La méthode est **interprétable** : on peut visualiser les vecteurs de mouvement et comprendre intuitivement ce qui se passe
 - Elle est **relativement simple à implémenter** avec des bibliothèques comme OpenCV
 
-Surtout, il existe un lien conceptuel direct entre le flux optique et l'épipole : en théorie, lorsque la caméra se déplace en ligne droite, les vecteurs de flux optique des points stationnaires convergent précisément vers l'épipole. Cette relation fondamentale rend l'approche par flux optique particulièrement adaptée à notre objectif de localisation de l'épipole.
-# 1er arc : le flux optique
+Surtout, il existe un lien conceptuel direct entre le flux optique et l'épipole qui rend cette approche particulièrement prometteuse. Pour comprendre cette relation, il faut imaginer ce qui se passe visuellement lorsque la voiture avance en ligne droite : les objets stationnaires de l'environnement (arbres, bâtiments, panneaux) semblent "s'écouler" vers l'arrière dans notre champ de vision, créant un effet de perspective où tous ces éléments paraissent diverger depuis un point central.
+
+Ce point central depuis lequel tout semble diverger est précisément l'épipole : le point vers lequel la voiture se dirige. Le flux optique, en calculant les vecteurs de déplacement apparent de chaque élément entre deux images consécutives, capture mathématiquement ce phénomène visuel. En théorie, lorsque la caméra se déplace en ligne droite, tous les vecteurs de flux optique des points stationnaires de l'environnement pointent dans des directions qui s'éloignent de l'épipole.
+
+Cette relation fondamentale fait du flux optique un outil naturel pour localiser l'épipole.
+# 1er arc : Flux optique
 Pour démarrer mon exploration, j'ai d'abord voulu établir une baseline avec l'approche la plus directe et intuitive possible. Dans cet arc, j'introduis le flux optique - une technique fondamentale qui restera au cœur de toutes mes approches tout au long de ce projet. En revanche, la méthode d'estimation de l'épipole que je présente ici est une première tentative simple, destinée à servir de point de comparaison pour les techniques plus sophistiquées que j'explorerai par la suite.
-## Le flux optique : capturer le mouvement dans l'image
-Le flux optique (ou optical flow) est une technique fondamentale en vision par ordinateur qui permet d'estimer le mouvement apparent des objets entre deux images consécutives. Plus précisément, il s'agit de calculer un vecteur de déplacement pour chaque pixel (ou certains points d'intérêt) entre deux frames successives.
-### Choix d'implémentation
+## Implémentation du flux optique
+Maintenant que le lien conceptuel entre flux optique et épipole est établi, il me fallait choisir comment implémenter concrètement cette approche pour exploiter cette relation géométrique.
+
 Le package `opencv` propose deux méthodes principales pour calculer le flux optique :
 - **cv2.calcOpticalFlowFarneback()** : dite "dense", cette méthode calcule le flux optique pour tous les pixels de l'image. Elle est particulièrement adaptée pour mesurer les mouvements continus et globaux, mais est plus coûteuse en calcul.
 - **cv2.calcOpticalFlowPyrLK()** : dite "sparse", cette méthode ne calcule le flux optique que pour des points spécifiques préalablement identifiés (généralement des coins ou des points d'intérêt). Elle est plus rapide mais nécessite une sélection pertinente des points à suivre.
@@ -89,7 +92,7 @@ Sur cette visualisation, chaque flèche représente le déplacement apparent d'u
 
 La méthode repose sur une observation fondamentale : dans un mouvement en ligne droite, les vecteurs de flux optique tendent à "s'écarter" du point vers lequel le véhicule se dirige (l'épipole). J'ai donc cherché à localiser ce point de convergence en analysant séparément les composantes horizontales et verticales du flux.
 
-L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc correspondre à l'épipole.
+L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc donner une estimation approximativede l'épipole.
 
 <div style="display: flex; justify-content: space-between;">
   <img src="./imgs/1/sep_vertical.png" style="width: 48%;" />
@@ -109,14 +112,20 @@ Isolons la méthode pour trouver l'axe de séparation vertical:
 3. Je sélectionne la position $s^*$ qui maximise cette différence :
    $$s^* = \arg\max_s \text{diff}(s)$$
 
-En appliquant cette méthode pour les axes horizontal et vertical, j'obtiens les coordonnées de l'épipole comme point d'intersection.
+En appliquant cette méthode pour les axes horizontal et vertical, j'obtiens les coordonnées de ma première estimation de l'épipole en calculant le point d'intersection entre les deux lignes de séparation.
 
 ## Résultats et limitations
-Avec cette méthode très simple, j'obtiens ma baseline - un score de **2030.42%**. Si vous vous demandiez s'il est possible de faire pire que 100%, vous avez votre réponse ! 
+Avec cette méthode très simple, j'obtiens ma baseline - un score de **1960.20%**. Si vous vous demandiez s'il est possible de faire pire que 100%, vous avez votre réponse ! 
 
 Bien que les figures présentées un peu plus haut montrent une séparation relativement claire sur certaines frames, cette méthode échoue complètement sur de nombreuses autres situations. Dans ces cas problématiques, les lignes de séparation se retrouvent collées aux bords de l'image, produisant des prédictions aberrantes. 
 
 J'ai notamment identifié plusieurs éléments qui handicapent gravement la prédiction de l'épipole avec cette technique, comme le capot de la voiture et les autres véhicules en mouvement dans la scène. Ce sont précisément ces problèmes que je vais adresser dans la section suivante.
+
+<figure>
+  <img src="./imgs/1/final_viz.gif" alt="Exemple de prédiction avec la méthode de l'arc 1" style="width: 90%;" />
+  <figcaption>Exemple de prédiction avec la méthode de l'arc 1</figcaption>
+</figure>
+
 # 2ème arc : la segmentation
 ## Problèmes identifiés avec la méthode précédente
 Avec la méthode précédente basée uniquement sur le flux optique, certaines frames donnent des résultats acceptables, mais l'ensemble est très bruité. Dans certains cas, l'algorithme échoue complètement comme on peut le voir dans ces exemples:
@@ -124,13 +133,13 @@ Avec la méthode précédente basée uniquement sur le flux optique, certaines f
   <img src="./imgs/2/sep_real_1.png" style="width: 48%;" />
   <img src="./imgs/2/sep_heatm_1.png" style="width: 48%;" />
 </div>
-**Exemple 1 - Le capot de la voiture:** On observe ici que le capot de la voiture reflète le décor, créant des vecteurs qui pointent vers le haut alors qu'ils sont situés en bas de l'image. Cela pousse artificiellement la ligne de séparation horizontale vers le haut, faussant complètement l'estimation de l'épipole.
+**Exemple 1 - Le capot de la voiture:** On observe ici que le capot de la voiture reflète le décor (les tâches bleues claires en bas de la figure à droite), créant des vecteurs qui pointent vers le haut alors qu'ils sont situés en bas de l'image. Cela pousse artificiellement la ligne de séparation horizontale vers le bas, faussant complètement l'estimation de l'épipole.
 
 <div style="display: flex; justify-content: space-between;">
   <img src="./imgs/2/sep_real_2.png" style="width: 48%;" />
   <img src="./imgs/2/sep_heatm_2.png" style="width: 48%;" />
 </div>
-**Exemple 2 - Véhicules en mouvement:** Dans ce second cas, c'est une camionnette qui double notre voiture qui crée des vecteurs orientés vers la droite alors qu'ils sont situés à gauche de l'écran. La ligne de séparation verticale se retrouve alors collée à l'extrémité gauche, produisant une estimation aberrante.
+**Exemple 2 - Véhicules en mouvement:** Dans ce second cas, c'est une camionnette qui double notre voiture qui crée des vecteurs orientés vers la droite alors qu'ils sont situés à gauche de l'écran (le tâches rougez à gauche de la figure de gauche). La ligne de séparation verticale se retrouve alors collée à l'extrémité gauche, produisant une estimation aberrante.
 
 La solution devient évidente: il faut segmenter et ignorer à la fois le capot de la voiture et les éléments mobiles du décor (autres véhicules, piétons) susceptibles de fausser notre estimation.
 
@@ -157,7 +166,12 @@ J'ai donc opté pour YOLOv8-seg, qui s'est avéré rapide et globalement efficac
 ### Segmentation manuelle du capot
 Un problème persistait cependant: YOLOv8 ne détecte pas le capot de la voiture, puisqu'il n'est pas entraîné pour cette tâche spécifique. J'ai donc développé rapidement une interface simple me permettant de segmenter manuellement le capot sur la première frame de chaque vidéo. Cette segmentation manuelle est ensuite appliquée à toutes les frames de la vidéo correspondante.
 ## Résultats et amélioration des performances
-L'application de cette segmentation combinée (YOLOv8 pour les objets mobiles + segmentation manuelle du capot) a permis de réduire le score d'erreur à **1487.75%**, représentant une amélioration d'environ 25% par rapport à la méthode basée uniquement sur le flux optique.
+L'application de cette segmentation combinée (YOLOv8 pour les objets mobiles + segmentation manuelle du capot) a permis de réduire le score d'erreur à **812.57%**, représentant une amélioration d'environ 60% par rapport à la méthode basée uniquement sur le flux optique.
+
+<figure>
+  <img src="./imgs/2/final_viz.gif" alt="Exemple de prédiction avec la méthode de l'arc 2" style="width: 90%;" />
+  <figcaption>Exemple de prédiction avec la méthode de l'arc 2</figcaption>
+</figure>
 
 Bien que ce score reste très élevé et loin d'être satisfaisant, cette amélioration confirme l'importance de la segmentation dans notre approche. Cette étape de prétraitement sera conservée et utilisée dans toutes les méthodes suivantes.
 # 3eme arc : nouvelle méthode pour estimation de l'épipole.
@@ -211,7 +225,7 @@ Pour cela, j'ai optimisé les paramètres de la fonction `cv2.calcOpticalFlowFar
 Après une série de tests, j'ai identifié une configuration satisfaisante qui améliore le critère sans trop augmenter le temps de calcul. Les principaux ajustements concernent la pyramide d'échelle (`pyr_scale`, `levels`), la taille de la fenêtre d'analyse (`winsize`) et les paramètres de lissage polynomial.
 
 ## Résultats de cette nouvelle approche
-Cette méthode donne une performance de **492%**, ce qui représente une amélioration d'environ 60% par rapport à l'itération précédente. 
+Cette méthode donne une performance de **492%**, ce qui représente une amélioration d'environ 40% par rapport à l'itération précédente. 
 
 Cette amélioration significative valide l'approche combinée: nouveau critère de colinéarité, méthode d'optimisation par descente de gradient, et paramétrage optimisé du flux optique.
 

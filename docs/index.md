@@ -225,9 +225,11 @@ Pour cela, j'ai optimisé les paramètres de la fonction `cv2.calcOpticalFlowFar
 Après une série de tests, j'ai identifié une configuration satisfaisante qui améliore le critère sans trop augmenter le temps de calcul. Les principaux ajustements concernent la pyramide d'échelle (`pyr_scale`, `levels`), la taille de la fenêtre d'analyse (`winsize`) et les paramètres de lissage polynomial.
 
 ## Résultats de cette nouvelle approche
-Cette méthode donne une performance de **492%**, ce qui représente une amélioration d'environ 40% par rapport à l'itération précédente. 
+Cette méthode donne une performance de **168.83%**, ce qui représente une amélioration d'environ 80% par rapport à l'itération précédente. 
 
 Cette amélioration significative valide l'approche combinée: nouveau critère de colinéarité, méthode d'optimisation par descente de gradient, et paramétrage optimisé du flux optique.
+
+![GIF de prédictions](./imgs/3/final_viz.gif){: style="width: 70%;"}
 
 Voilà du progrès !
 # 4ème arc : filtrage des vecteurs
@@ -353,7 +355,7 @@ L'exploration de l'espace des paramètres a permis d'identifier les valeurs suiv
 - **Seuil de colinéarité** : 0.96
 - **Seuil de norme** : 13
 
-Ces paramètres ont produit un **score de 44.66%**, représentant une amélioration significative de 90% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
+Ces paramètres ont produit un **score de 44.66%**, représentant une amélioration significative de 74% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
 
 # 5ème arc : amélioration du filtrage et post-processing
 ## Partie 1 : améliorations du pipeline
@@ -593,6 +595,24 @@ Pour les moyennes exponentielles, j'ai optimisé le paramètre α par recherche 
 On observe que lisser les prédictions avec la moyenne exponentielle bi-directionnelle est systématiquement la meilleure option.
 
 **Résultat final : 8.58%** avec la méthode de lissage exponentiel bi-directionnel.
+
+<div style="text-align: center; margin-bottom: 20px;">
+  <h4>Comparaison des résultats finaux</h4>
+  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div style="width: 48%; text-align: center;">
+      <h5>Point de référence : Centre de l'image</h5>
+      <img src="./imgs/5/final_viz_center.gif" alt="GIF de prédictions - Centre" style="width: 100%;">
+    </div>
+    <div style="width: 48%; text-align: center;">
+      <h5>Point de référence : Moyenne de l'expérience précédente</h5>
+      <img src="./imgs/5/final_viz_mean.gif" alt="GIF de prédictions - Moyenne" style="width: 100%;">
+    </div>
+  </div>
+</div>
+
+Sur la figure ci-dessus, visuellement, je tends à préférer la méthode utilisant le point de référence au centre de l'image car elle semble plus réactive aux changements de direction du véhicule bien que l'erreur par rapport au label soit plus élevée.
+Je soupçonne par conséquent que les labels ne sont pas parfaitement fiables car trop centrés autour de leur valeur moyenne.
+
 #### Observation annexe : Pourquoi contraindre le point de référence au centre
 
 Une question légitime se pose : pourquoi ne pas laisser la recherche bayésienne optimiser simultanément tous les paramètres, y compris le choix du point de référence pour les scores de colinéarité ?

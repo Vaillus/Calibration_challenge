@@ -28,11 +28,21 @@ from src.utilities.fix_predictions import fix_predictions
 from src.core.flow_filter import FlowFilterSample
 
 
-def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+def load_config(run_name: str = "default", config_path: Optional[str] = None) -> Dict[str, Any]:
     """Charge la configuration depuis config.json."""
     if config_path is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(script_dir, 'config.json')
+        # D'abord essayer de lire depuis le dossier de prédictions du run
+        pred_run_dir = get_pred_dir(run_name)
+        run_config_path = pred_run_dir / 'config.json'
+        
+        if run_config_path.exists():
+            config_path = str(run_config_path)
+            print(f"📂 Config chargée depuis: {config_path}")
+        else:
+            # Fallback vers la config par défaut du script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(script_dir, 'config.json')
+            print(f"📂 Config par défaut: {config_path}")
     
     with open(config_path, 'r') as f:
         config = json.load(f)
@@ -243,13 +253,13 @@ class VideoProcessor:
         # Conversion grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         # Gestion masques
-        combined_mask = self._create_mask(frame)
+        mask = self._create_mask(frame)
         # Calcul flux optique et filtrage
-        flow, _, _ = calculate_flow(self.prev_gray, gray, combined_mask)
+        flow, _, _ = calculate_flow(self.prev_gray, gray, mask)
         flow, weights = self.filter.filter_and_weight(flow)
         
         # Prédiction selon méthode choisie
-        x, y = self._predict_vanishing_point(flow, combined_mask, weights)
+        x, y = self._predict_vanishing_point(flow, mask, weights)
         
         # Conversion angles et stockage
         pitch, yaw = pixels_to_angles(x, y)
@@ -307,7 +317,7 @@ def main(
         video_indices = list(range(5))
 
     # Configuration
-    config = load_config()
+    config = load_config(run_name)
     
     print(f"🚀 DÉMARRAGE RUN: {run_name}")
     print(f"📂 Prédictions: {get_pred_dir(run_name)}")
@@ -328,4 +338,5 @@ def main(
 
 
 if __name__ == "__main__":
-    main() 
+    run_name = "2_new"
+    main(run_name=run_name) 

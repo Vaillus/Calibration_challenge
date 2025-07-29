@@ -389,7 +389,7 @@ Cette formulation présente plusieurs avantages déterminants.
 D'une part, elle englobe naturellement les cas extrêmes : un paramètre $k$ très élevé reproduit un filtrage binaire classique (eg. le filtre "dur" mentionné précédemment est exprimé par $sig(x,13,\infty)$), tandis qu'une valeur de $k$ faible génère une pondération linéaire. 
 D'autre part, elle se limite à seulement deux paramètres à optimiser, préservant ainsi la tractabilité de l'espace de recherche.
 
-![Fonctions sigmoïde](./imgs/5/sigmoids.png){: style="width: 70%;"}
+![Fonctions sigmoïde](./imgs/5/sigmoids.gif){: style="width: 70%;"}
 
 Cette généralité permet d'explorer de manière unifiée différentes stratégies de filtrage, simplifiant considérablement le processus d'expérimentation.
 

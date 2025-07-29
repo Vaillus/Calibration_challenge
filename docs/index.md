@@ -355,7 +355,11 @@ L'exploration de l'espace des paramètres a permis d'identifier les valeurs suiv
 - **Seuil de colinéarité** : 0.96
 - **Seuil de norme** : 13
 
-Ces paramètres ont produit un **score de 44.66%**, représentant une amélioration significative de 74% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
+![Comparaison des filtres](./imgs/4/effet_filtrage.png){: style="width: 70%;"}
+
+Ces paramètres ont produit un **score de 54.32%**, représentant une amélioration significative de ?????% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
+
+![GIF de prédictions](./imgs/4/final_viz.gif){: style="width: 70%;"}
 
 # 5ème arc : amélioration du filtrage et post-processing
 ## Partie 1 : améliorations du pipeline

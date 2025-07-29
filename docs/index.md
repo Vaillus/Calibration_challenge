@@ -235,7 +235,7 @@ Voilà du progrès !
 # 4ème arc : filtrage des vecteurs
 ## Repenser le filtrage
 Dans l'itération précédente du projet, j'ai arbitrairement choisi de filtrer les vecteurs et ne garder que ceux dont la norme est supérieure à $10^{-2}$ car j'ai observé que les vecteurs plus petits avaient tendance à être plus bruités.
-Mon intuition m'a mené à penser que creuser dans cette direction me mènerai à une amélioration significative des performances.
+Mon intuition m'a mené à penser que creuser dans cette direction me mènerait à une amélioration significative des performances.
 ### Critères de filtrage envisagés
 J'ai identifié trois critères prometteurs pour améliorer la sélection des vecteurs :
 1) **Norme des vecteurs** : Basé sur l'observation mentionnée précédemment - les vecteurs de faible amplitude sont effectivement plus bruités.
@@ -383,13 +383,13 @@ où :
 - θ : seuil/centre de la sigmoïde
 - α : raideur/pente de la transition
 
-[insérer figure sigmoïde]
+![Fonction sigmoïde](./imgs/5/sigmoid.png){: style="width: 70%;"}
 
 Cette formulation présente plusieurs avantages déterminants. 
 D'une part, elle englobe naturellement les cas extrêmes : un paramètre $k$ très élevé reproduit un filtrage binaire classique (eg. le filtre "dur" mentionné précédemment est exprimé par $sig(x,13,\infty)$), tandis qu'une valeur de $k$ faible génère une pondération linéaire. 
 D'autre part, elle se limite à seulement deux paramètres à optimiser, préservant ainsi la tractabilité de l'espace de recherche.
 
-[faire la figure]
+![Fonctions sigmoïde](./imgs/5/sigmoids.png){: style="width: 70%;"}
 
 Cette généralité permet d'explorer de manière unifiée différentes stratégies de filtrage, simplifiant considérablement le processus d'expérimentation.
 
@@ -582,6 +582,12 @@ Les paramètres optimaux identifiés sont :
 - **Filtre de colinéarité** : α = 152, θ = 1.245
 - **Point de référence** : centre de l'image
 - **Heatmap** : coefficient = 0.0
+
+Cela donne des filtres sigmoïdaux qui ressemblent à ceci :
+
+![Fonctions sigmoïde](./imgs/5/sigmoids_opti.png){: style="width: 70%;"}
+
+On observe qu'on est resté sur un filtre "dur" pour le filtre de norme. En revanche, le filtre de colinéarité ressemble plus à une exponentielle décollant autour de 0.975.
 
 Cette configuration atteint une performance de **39.47%**.
 

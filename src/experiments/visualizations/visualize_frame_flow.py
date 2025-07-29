@@ -1,79 +1,81 @@
+#!/usr/bin/env python3
+"""
+Visualisation simple d'une frame avec vecteurs de flux optique non filtrés.
+Affiche l'image en fond avec tous les vecteurs de flow sans filtrage.
+
+Usage:
+    python visualize_raw_flow.py
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
-import os
 
-from src.utilities.load_ground_truth import get_frame_pixel
-from src.utilities.paths import get_labeled_dir, get_flows_dir
+from src.utilities.paths import get_labeled_dir
 from src.utilities.load_video_frame import read_frame_rgb
 from src.utilities.load_flows import load_flows
 
-def visualize_flow(flow, frame_idx, video_idx=0, stride=20, display_img=True):
+
+def visualize_raw_flow(video_idx: int = 3, frame_idx: int = 101, stride: int = 20):
     """
-    Visualize optical flow field with arrows.
+    Visualise une frame avec le champ de vecteurs de flow non filtré.
     
     Args:
-        flow: Flow field array (H, W, 2)
-        frame_idx: Index of the frame to visualize
-        video_idx: Index of the video
-        stride: Spacing between arrows (higher = fewer arrows)
+        video_idx: Index de la vidéo
+        frame_idx: Index de la frame
+        stride: Espacement entre les flèches (plus élevé = moins de flèches)
     """
+    print(f"📂 Chargement frame {frame_idx} - vidéo {video_idx}...")
+    
+    # Load RGB frame
     video_path = get_labeled_dir() / f'{video_idx}.hevc'
     _, frame_rgb = read_frame_rgb(video_path, frame_idx)
-
-    gt_pixels = get_frame_pixel(video_idx, frame_idx)
-    center_pixel = (frame_rgb.shape[1] // 2, frame_rgb.shape[0] // 2)
     
+    # Load raw flow data (non filtré)
+    flow_data = load_flows(video_idx, start_frame=frame_idx-1, end_frame=frame_idx-1)
+    flow_data = flow_data[0]  # Remove batch dimension: (1, H, W, 2) -> (H, W, 2)
+    
+    print(f"✅ Données chargées - Flow shape: {flow_data.shape}")
+    
+    # Create figure
+    plt.figure(figsize=(12, 8))
+    
+    # Display the frame as background
+    plt.imshow(frame_rgb)
     
     # Create grid for arrows
-    h, w = flow.shape[:2]
+    h, w = flow_data.shape[:2]
     y, x = np.mgrid[0:h:stride, 0:w:stride].reshape(2, -1)
     
     # Get flow vectors at grid points
-    fx = flow[y, x, 0]
-    fy = flow[y, x, 1]
+    fx = flow_data[y, x, 0]
+    fy = flow_data[y, x, 1]
     
-    # Filter out zero or near-zero flow values
-    magnitude = np.sqrt(fx**2 + fy**2)
-    mask = magnitude > 13  # Threshold for minimum flow magnitude
+    # Plot ALL flow vectors (no filtering)
+    plt.quiver(x, y, fx, fy, 
+              color='red', angles='xy', scale_units='xy', scale=1, width=0.002, alpha=0.8)
     
-    plot_stuff(frame_rgb, gt_pixels, center_pixel, x, y, fx, fy, mask, video_idx, frame_idx, display_img)
-
-def plot_stuff(frame_rgb, gt_pixels, center_pixel, x, y, fx, fy, mask, video_idx, frame_idx, display_img):
-    # Create figure
-    plt.figure(figsize=(15, 10))
-    
-    # Plot original frame
-    if display_img:
-        plt.imshow(frame_rgb)
-    else:
-        plt.xlim(0, frame_rgb.shape[1])
-        plt.ylim(0, frame_rgb.shape[0])
-        ax = plt.gca()
-        ax.invert_yaxis()
-    
-    # Plot arrows only where there is significant flow
-    plt.quiver(x[mask], y[mask], fx[mask], fy[mask], 
-              color='r', angles='xy', scale_units='xy', scale=1, width=0.001)
-    
-    plt.scatter(gt_pixels[0], gt_pixels[1], color='b', s=10, label='Ground Truth')
-
-    plt.scatter(center_pixel[0], center_pixel[1], color='g', s=10, label='Center of Image')
-    
-    plt.title(f'Flow Field - Video {video_idx}, Frame {frame_idx}')
+    # plt.title(f'Champ de Flux Non Filtré - Vidéo {video_idx}, Frame {frame_idx}')
     plt.axis('off')
+    plt.tight_layout()
     plt.show()
+    
+    print("✅ Visualisation terminée")
+
 
 def main():
-    # Load flows
-    video_idx = 1
-    frame_idx = 201
-    flow = load_flows(video_idx, start_frame=frame_idx, end_frame=frame_idx)
-    print(f"Shape du flow: {flow.shape}")
-    # Extract single frame from batch dimension
-    flow = flow[0]  # Remove batch dimension: (1, H, W, 2) -> (H, W, 2)
-    print(f"Shape du flow après extraction: {flow.shape}")
-    visualize_flow(flow, frame_idx, video_idx, display_img=False)
+    """Fonction principale avec paramètres par défaut."""
+    print("🎯 VISUALISATION FLUX NON FILTRÉ")
+    print("=" * 40)
+    
+    # Paramètres par défaut
+    video_idx = 4
+    frame_idx = 380
+    stride = 20
+    
+    print(f"📊 Configuration: Vidéo {video_idx}, Frame {frame_idx}, Stride {stride}")
+    
+    visualize_raw_flow(video_idx=video_idx, frame_idx=frame_idx, stride=stride)
+
 
 if __name__ == "__main__":
     main() 

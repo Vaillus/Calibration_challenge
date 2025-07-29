@@ -317,11 +317,17 @@ Cette stratégie s'est heurtée aux limitations techniques de MLX : contrainte d
 
 Cependant, mes tests préliminaires sur quelques frames individuelles montraient qu'Adam convergait de manière satisfaisante avec une fonction de coût généralement convexe. J'ai donc décidé de conserver cette implémentation malgré l'absence de parallélisation, faisant du module 3 mon principal goulot d'étranglement dans la pipeline d'optimisation.
 
-**Paramétrage et premier early stopping**
-Pour l'implémentation d'Adam, j'ai adapté les hyperparamètres à partir de mes observations initiales de la fonction de coût : celle-ci présentait généralement une forme convexe et permettait une convergence rapide. J'ai donc ajusté les paramètres β₁=0.6 et β₂=0.98 afin de favoriser une convergence plus rapide.
+**Paramétrage et early stopping optimisé**
 
-Initialement, j'avais opté pour une approche simple : **50 itérations fixes**. Mes tests sur quelques frames montraient que cette limite permettait systématiquement d'atteindre une position très proche du minimum global, bien que les dernières itérations ne soient souvent pas très utiles.
-J'ai ensuite implémenté un **early stopping basé sur la détection de plateau** : l'optimisation s'arrête lorsque la fonction de coût n'améliore pas de plus de 1e-4 pendant 3 itérations consécutives. Cette modification a permis de réduire significativement le nombre d'itérations moyen tout en maintenant une qualité de convergence similaire.
+N'ayant pas réussi à paralléliser la descente de gradient, mon objectif principal était de **réduire le temps de calcul** du module d'optimisation. Partant d'une approche simple de **50 itérations fixes**, j'ai implémenté un **early stopping basé sur la détection de plateau** : l'optimisation s'arrête lorsque la fonction de coût n'améliore pas de plus de 1e-4 pendant 3 itérations consécutives.
+
+Cette modification a effectivement permis de **réduire le temps de calcul de 3 à 5 fois**. Mais de manière inattendue, j'ai également observé une **amélioration des performances** en termes d'erreur par rapport aux labels.
+
+En analysant ce phénomène surprenant, j'ai compris que converger jusqu'au fond de la fonction convexe éloignait souvent la prédiction du centre de l'image. Dans les cas où la direction d'optimisation n'est pas parfaitement alignée avec l'épipole réel, s'arrêter prématurément évite de s'éloigner excessivement et maintient la prédiction plus proche du label.
+
+Cette stratégie d'arrêt prématuré s'est donc révélée doublement bénéfique : accélération du calcul ET amélioration de la précision.
+
+![GIF de prédictions](./imgs/4/optimizer_comp.png){: style="width: 70%;"}
 
 À ce stade, je privilégiais la vitesse d'exploration : valider rapidement que l'approche fonctionnait avant de peaufiner les détails. Cette stratégie pragmatique s'est avérée suffisante pour passer à l'étape suivante, où une évaluation plus rigoureuse deviendrait nécessaire.
 #### Conclusion

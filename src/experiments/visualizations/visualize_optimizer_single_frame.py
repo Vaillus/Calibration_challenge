@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Visualisation des trajectoires d'optimisation sur une seule frame.
+Visualisation des trajectoires d'optimisation sur une seule frame - Arc 4.
 
-Compare 3 optimiseurs pour l'estimation de points de fuite :
+Compare 3 optimiseurs pour l'estimation de points de fuite (configuration Arc 4) :
 - L-BFGS-B (ancienne méthode)
 - Adam 50 itérations (sans early stopping, référence)  
-- Adam avec pixel patience (optimisé)
+- Adam avec early stopping sur plateau (détection de plateau)
 
-Affiche les trajectoires sur une carte topologique.
+Affiche les trajectoires sur une carte topologique avec valeurs négatives du score de colinéarité.
 Configurez VIDEO_ID et FRAME_IDX dans main() pour changer la frame analysée.
 """
 
@@ -43,18 +43,16 @@ def load_frame_data(video_id, frame_idx):
     _, frame_rgb = read_frame_rgb(video_path, frame_idx)
     
     from src.utilities.load_flows import load_flows
-    flow_data = load_flows(video_id, use_compressed=False, start_frame=frame_idx, end_frame=frame_idx)
+    flow_data_batch = load_flows(video_id, use_compressed=False, start_frame=frame_idx, end_frame=frame_idx)
     
-    # Load flow data
-    npz_path = get_flows_dir() / f"{video_id}_float16.npz"
-    with np.load(npz_path) as data:
-        flow_data = data['flow'][frame_idx]
+    # Extract the single frame from the batch (load_flows returns a batch even for single frame)
+    flow_data = flow_data_batch[0] if flow_data_batch is not None else None
     
     # Load ground truth
     gt_pixels = read_ground_truth_pixels(video_id)
     gt_point = gt_pixels[frame_idx + 1]  # GT is 1-indexed
     
-    # Apply filtering
+    # Apply filtering (Arc 4 parameters: norm 13 and colinearity 0.96)
     flow_mx = mx.array(flow_data, dtype=mx.float32)
     filter_config = {
         'filtering': {
@@ -67,10 +65,11 @@ def load_frame_data(video_id, frame_idx):
         }
     }
     flow_filter = FlowFilterBatch(filter_config)
-    filtered_flow_batch, weights_batch = flow_filter.filter_and_weight(flow_mx[None, :, :, :])
+    filtered_flow_batch = flow_filter.filter(flow_mx[None, :, :, :])
     
     filtered_flow = filtered_flow_batch[0]
-    weights = weights_batch[0] if weights_batch is not None else None
+    # weights = weights_batch[0] if weights_batch is not None else None
+    weights = None
     
     print(f"✅ Frame {frame_idx} (vidéo {video_id}) chargée")
     print(f"   RGB shape: {frame_rgb.shape}")
@@ -82,12 +81,12 @@ def load_frame_data(video_id, frame_idx):
 
 def run_three_optimizations(filtered_flow, weights):
     """
-    Lance les 3 optimisations finales et récupère les trajectoires.
+    Lance les 3 optimisations de l'arc 4 et récupère les trajectoires.
     
     Returns:
         dict: Résultats avec trajectoires et temps d'exécution
     """
-    print("\n🚀 Lancement des 3 optimisations finales...")
+    print("\n🚀 Lancement des 3 optimisations Arc 4...")
     
     # Convert to numpy for L-BFGS-B
     filtered_flow_np = np.array(filtered_flow)
@@ -162,39 +161,43 @@ def run_three_optimizations(filtered_flow, weights):
     print(f"  Temps: {adam_basic_time:.4f}s")
     print(f"  Itérations: {len(results['adam_basic']['trajectory'])}")
     
-    # ===== 3. Adam AVEC pixel patience =====
-    print("--- 3. Adam (AVEC pixel patience) ---")
-    adam_pixel_optimizer = AdamOptimizer()  # Utilise les paramètres par défaut (pixel_patience=5)
+    # ===== 3. Adam AVEC early stopping sur plateau =====
+    print("--- 3. Adam (AVEC early stopping sur plateau) ---")
+    adam_plateau_optimizer = AdamOptimizer(
+        plateau_threshold=1e-4,  # Seuil pour détecter un plateau
+        plateau_patience=3,      # Nombre d'itérations de patience
+        pixel_patience=0         # Pas de pixel patience
+    )
     
     start_point = mx.array([filtered_flow.shape[1] // 2, filtered_flow.shape[0] // 2], dtype=mx.float32)
     
     start_time = time.time()
-    adam_pixel_point = adam_pixel_optimizer.optimize_single(
+    adam_plateau_point = adam_plateau_optimizer.optimize_single(
         filtered_flow, 
         starting_point=start_point,
         save_trajectories=True
     )
-    adam_pixel_time = time.time() - start_time
+    adam_plateau_time = time.time() - start_time
     
-    adam_pixel_score = float(adam_estimator.colin_score(filtered_flow, adam_pixel_point, weights=weights))
+    adam_plateau_score = float(adam_estimator.colin_score(filtered_flow, adam_plateau_point, weights=weights))
     
-    results['adam_pixel'] = {
-        'point': (float(adam_pixel_point[0]), float(adam_pixel_point[1])),
-        'score': adam_pixel_score,
-        'time': adam_pixel_time,
-        'trajectory': adam_pixel_optimizer.trajectory.copy(),
-        'scores': adam_pixel_optimizer.scores.copy(),
-        'method': 'Adam (pixel patience)'
+    results['adam_plateau'] = {
+        'point': (float(adam_plateau_point[0]), float(adam_plateau_point[1])),
+        'score': adam_plateau_score,
+        'time': adam_plateau_time,
+        'trajectory': adam_plateau_optimizer.trajectory.copy(),
+        'scores': adam_plateau_optimizer.scores.copy(),
+        'method': 'Adam (plateau early stopping)'
     }
     
-    print(f"  Point: ({float(adam_pixel_point[0]):.2f}, {float(adam_pixel_point[1]):.2f})")
-    print(f"  Score: {adam_pixel_score:.6f}")
-    print(f"  Temps: {adam_pixel_time:.4f}s")
-    print(f"  Itérations: {len(results['adam_pixel']['trajectory'])}")
+    print(f"  Point: ({float(adam_plateau_point[0]):.2f}, {float(adam_plateau_point[1]):.2f})")
+    print(f"  Score: {adam_plateau_score:.6f}")
+    print(f"  Temps: {adam_plateau_time:.4f}s")
+    print(f"  Itérations: {len(results['adam_plateau']['trajectory'])}")
     
     # ===== Comparaison des performances =====
     print(f"\n🏁 COMPARAISON DES PERFORMANCES:")
-    times = [results['lbfgs']['time'], results['adam_basic']['time'], results['adam_pixel']['time']]
+    times = [results['lbfgs']['time'], results['adam_basic']['time'], results['adam_plateau']['time']]
     fastest_time = min(times)
     
     for key, result in results.items():
@@ -208,9 +211,13 @@ def run_three_optimizations(filtered_flow, weights):
     return results
 
 
-def plot_trajectories_on_topological_map(filtered_flow, weights, gt_point, results, image_shape, video_id=4, frame_idx=266):
+def plot_trajectories_on_topological_map(filtered_flow, weights, gt_point, results, image_shape, video_id=4, frame_idx=266, show_topological_map=True):
     """
     Visualisation : trajectoires des optimiseurs sur carte topologique avec vecteurs de flux.
+    Utilise la valeur NEGATIVE du score de colinéarité pour la carte topologique.
+    
+    Args:
+        show_topological_map: Si True, calcule et affiche la carte topologique (lent). Si False, affiche seulement les trajectoires.
     """
     print("\n📊 Création des trajectoires sur carte topologique...")
     
@@ -225,39 +232,44 @@ def plot_trajectories_on_topological_map(filtered_flow, weights, gt_point, resul
     center_y = image_shape[0] // 2
     
     # Définir la zone d'intérêt autour des points trouvés
-    all_x = [gt_point[0], results['lbfgs']['point'][0], results['adam_basic']['point'][0], results['adam_pixel']['point'][0], center_x]
-    all_y = [gt_point[1], results['lbfgs']['point'][1], results['adam_basic']['point'][1], results['adam_pixel']['point'][1], center_y]
+    all_x = [gt_point[0], results['lbfgs']['point'][0], results['adam_basic']['point'][0], results['adam_plateau']['point'][0], center_x]
+    all_y = [gt_point[1], results['lbfgs']['point'][1], results['adam_basic']['point'][1], results['adam_plateau']['point'][1], center_y]
     
     # Extend the range a bit
     margin = 50
     x_min, x_max = min(all_x) - margin, max(all_x) + margin
     y_min, y_max = min(all_y) - margin, max(all_y) + margin
     
-    # Créer la grille pour la carte topologique (résolution réduite pour vitesse)
-    x = np.linspace(x_min, x_max, 20)
-    y = np.linspace(y_min, y_max, 15)
-    X, Y = np.meshgrid(x, y)
-    
-    print("  Calcul de la carte topologique...")
-    Z = np.zeros_like(X)
-    total_points = len(x) * len(y)
-    current_point = 0
-    
-    for i in range(len(x)):
-        for j in range(len(y)):
-            Z[j, i] = estimator.colin_score(filtered_flow_np, (X[j, i], Y[j, i]), weights=weights_np, step=5)
-            current_point += 1
-            if current_point % 50 == 0:
-                print(f"    Progress: {current_point}/{total_points} ({100*current_point/total_points:.0f}%)")
-    
-    print("  ✅ Carte topologique calculée")
-    
     # Créer le plot
     plt.figure(figsize=(16, 12))
     
-    # Carte topologique
-    contour = plt.contourf(X, Y, Z, levels=20, cmap='viridis', alpha=0.7)
-    plt.colorbar(contour, label='Score de Collinéarité')
+    # Carte topologique (optionnelle pour itération rapide)
+    if show_topological_map:
+        # Créer la grille pour la carte topologique (résolution réduite pour vitesse)
+        x = np.linspace(x_min, x_max, 20)
+        y = np.linspace(y_min, y_max, 15)
+        X, Y = np.meshgrid(x, y)
+        
+        print("  Calcul de la carte topologique (valeurs négatives)...")
+        Z = np.zeros_like(X)
+        total_points = len(x) * len(y)
+        current_point = 0
+        
+        for i in range(len(x)):
+            for j in range(len(y)):
+                # UTILISER LA VALEUR NEGATIVE du score de colinéarité
+                Z[j, i] = -estimator.colin_score(filtered_flow_np, (X[j, i], Y[j, i]), weights=weights_np, step=5)
+                current_point += 1
+                if current_point % 50 == 0:
+                    print(f"    Progress: {current_point}/{total_points} ({100*current_point/total_points:.0f}%)")
+        
+        print("  ✅ Carte topologique calculée")
+        
+        # Afficher la carte topologique
+        contour = plt.contourf(X, Y, Z, levels=20, cmap='viridis', alpha=0.7)
+        plt.colorbar(contour, label='Score de Collinéarité')
+    else:
+        print("  ⚡ Carte topologique désactivée pour itération rapide")
     
     # Ajouter les vecteurs de flux optique dans la zone d'intérêt
     print("  Ajout des vecteurs de flux...")
@@ -293,43 +305,38 @@ def plot_trajectories_on_topological_map(filtered_flow, weights, gt_point, resul
     # Trajectoires (zorder plus élevé pour être au-dessus)
     if len(results['lbfgs']['trajectory']) > 1:
         traj_lbfgs = np.array(results['lbfgs']['trajectory'])
-        plt.plot(traj_lbfgs[:, 0], traj_lbfgs[:, 1], 'r.-', linewidth=4, markersize=10, 
+        plt.plot(traj_lbfgs[:, 0], traj_lbfgs[:, 1], 'r.-', linewidth=1.5, markersize=6, 
                 label='Trajectoire L-BFGS-B', alpha=1.0, zorder=5)
-        plt.annotate('Start L-BFGS', traj_lbfgs[0], color='red', fontsize=12, fontweight='bold', zorder=6)
     
     if len(results['adam_basic']['trajectory']) > 1:
         traj_adam_basic = np.array(results['adam_basic']['trajectory'])
-        plt.plot(traj_adam_basic[:, 0], traj_adam_basic[:, 1], 'b.-', linewidth=3, markersize=6, 
-                label='Trajectoire Adam (SANS early stopping)', alpha=0.9, zorder=4)
-        plt.annotate('Start Adam (50 iter)', traj_adam_basic[0], color='blue', fontsize=10, fontweight='bold', zorder=6)
+        plt.plot(traj_adam_basic[:, 0], traj_adam_basic[:, 1], 'b.-', linewidth=1.5, markersize=6, 
+                label='Trajectoire Adam (50 iter)', alpha=0.9, zorder=4)
     
-    if len(results['adam_pixel']['trajectory']) > 1:
-        traj_adam_pixel = np.array(results['adam_pixel']['trajectory'])
-        plt.plot(traj_adam_pixel[:, 0], traj_adam_pixel[:, 1], 'm.-', linewidth=3, markersize=6, 
-                label='Trajectoire Adam (AVEC pixel patience)', alpha=0.9, zorder=4)
-        plt.annotate('Start Adam (pixel patience)', traj_adam_pixel[0], color='magenta', fontsize=10, fontweight='bold', zorder=6)
+    if len(results['adam_plateau']['trajectory']) > 1:
+        traj_adam_plateau = np.array(results['adam_plateau']['trajectory'])
+        plt.plot(traj_adam_plateau[:, 0], traj_adam_plateau[:, 1], 'm.-', linewidth=1.5, markersize=6, 
+                label='Trajectoire Adam (plateau early stopping)', alpha=0.9, zorder=4)
     
     # Points finaux et GT (zorder élevé pour être bien visibles)
     plt.scatter(results['lbfgs']['point'][0], results['lbfgs']['point'][1], 
-               color='red', s=200, marker='o', label='L-BFGS-B Final', 
-               edgecolor='white', linewidth=4, zorder=10)
+               color='red', s=120, marker='o', label='L-BFGS-B, position finale', 
+               edgecolor='white', linewidth=1, zorder=10)
     plt.scatter(results['adam_basic']['point'][0], results['adam_basic']['point'][1], 
-               color='blue', s=180, marker='s', label='Adam (50 iter) Final', 
-               edgecolor='white', linewidth=3, zorder=10)
-    plt.scatter(results['adam_pixel']['point'][0], results['adam_pixel']['point'][1], 
-               color='magenta', s=180, marker='*', label='Adam (pixel patience) Final', 
-               edgecolor='white', linewidth=3, zorder=10)
-    plt.scatter(gt_point[0], gt_point[1], color='lime', s=250, marker='*', 
-               label='Ground Truth', edgecolor='black', linewidth=4, zorder=10)
+               color='blue', s=120, marker='s', label='Adam (50 iter), position finale', 
+               edgecolor='white', linewidth=1, zorder=10)
+    plt.scatter(results['adam_plateau']['point'][0], results['adam_plateau']['point'][1], 
+               color='magenta', s=120, marker='*', label='Adam (plateau), position finale', 
+               edgecolor='white', linewidth=1, zorder=10)
+    plt.scatter(gt_point[0], gt_point[1], color='lime', s=120, marker='*', 
+               label='Label', edgecolor='black', linewidth=1, zorder=10)
     
     # Centre de l'image
     plt.scatter(center_x, center_y, color='orange', s=150, marker='+', 
-               label='Centre Image', linewidth=5, zorder=10)
+               label='Centre Image', linewidth=2.5, zorder=10)
     
-    plt.title(f'Trajectoires d\'Optimisation sur Carte Topologique + Vecteurs de Flux\nFrame {frame_idx} - Vidéo {video_id}', 
-             fontsize=16, fontweight='bold')
-    plt.xlabel('X coordinate', fontsize=12)
-    plt.ylabel('Y coordinate', fontsize=12)
+    plt.xlabel('X', fontsize=12)
+    plt.ylabel('Y', fontsize=12)
     
     # INVERSER l'axe Y pour correspondre au système de coordonnées image
     plt.gca().invert_yaxis()
@@ -339,11 +346,10 @@ def plot_trajectories_on_topological_map(filtered_flow, weights, gt_point, resul
     
     # Ajouter des infos dans un coin
     info_text = f"""Scores finaux:
-L-BFGS-B: {results['lbfgs']['score']:.6f}
-Adam (SANS early stopping): {results['adam_basic']['score']:.6f}
-Adam (AVEC pixel patience): {results['adam_pixel']['score']:.6f}
-Différence (SANS early stopping): {results['adam_basic']['score'] - results['lbfgs']['score']:.6f}
-Différence (AVEC pixel patience): {results['adam_pixel']['score'] - results['lbfgs']['score']:.6f}"""
+L-BFGS-B: {-results['lbfgs']['score']:.6f}
+Adam (50 iter): {-results['adam_basic']['score']:.6f}
+Adam (plateau): {-results['adam_plateau']['score']:.6f}
+"""
     
     plt.text(0.02, 0.98, info_text, transform=plt.gca().transAxes, 
              fontsize=9, verticalalignment='top', fontfamily='monospace',
@@ -355,20 +361,21 @@ Différence (AVEC pixel patience): {results['adam_pixel']['score'] - results['lb
     print("✅ Visualisation terminée")
 
 
-def main(video_id=4, frame_idx=266):
+def main(video_id=4, frame_idx=266, show_topological_map=True):
     """
-    Fonction principale - Analyse comparative des 3 optimiseurs.
+    Fonction principale - Analyse comparative des 3 optimiseurs Arc 4.
     
     Args:
         video_id: ID de la vidéo à analyser (0-4)
         frame_idx: Index de la frame à analyser
+        show_topological_map: Si True, calcule et affiche la carte topologique (lent). Si False, itération rapide.
     """
-    print(f"🎯 ANALYSE FRAME {frame_idx} - VIDÉO {video_id}")
+    print(f"🎯 ANALYSE FRAME {frame_idx} - VIDÉO {video_id} (Arc 4)")
     print("=" * 60)
-    print("Comparaison de 3 optimiseurs :")
+    print("Comparaison de 3 optimiseurs Arc 4 :")
     print("  1. L-BFGS-B (paramètres par défaut)")
     print("  2. Adam (50 itérations, pas d'early stopping)")
-    print("  3. Adam (avec pixel patience)")
+    print("  3. Adam (avec early stopping sur plateau)")
     print("=" * 60)
     
     # 1. Charger les données
@@ -378,27 +385,27 @@ def main(video_id=4, frame_idx=266):
     results = run_three_optimizations(filtered_flow, weights)
     
     # 3. Visualisation : trajectoires sur carte topologique
-    plot_trajectories_on_topological_map(filtered_flow, weights, gt_point, results, flow_data.shape, video_id, frame_idx)
+    plot_trajectories_on_topological_map(filtered_flow, weights, gt_point, results, flow_data.shape, video_id, frame_idx, show_topological_map)
     
     # 4. Résumé
     print("\n" + "=" * 60)
-    print("📊 RÉSUMÉ")
+    print("📊 RÉSUMÉ ARC 4")
     print("=" * 60)
     
     lbfgs_dist = np.sqrt((results['lbfgs']['point'][0] - gt_point[0])**2 + 
                         (results['lbfgs']['point'][1] - gt_point[1])**2)
     adam_basic_dist = np.sqrt((results['adam_basic']['point'][0] - gt_point[0])**2 + 
                                     (results['adam_basic']['point'][1] - gt_point[1])**2)
-    adam_pixel_dist = np.sqrt((results['adam_pixel']['point'][0] - gt_point[0])**2 + 
-                               (results['adam_pixel']['point'][1] - gt_point[1])**2)
+    adam_plateau_dist = np.sqrt((results['adam_plateau']['point'][0] - gt_point[0])**2 + 
+                               (results['adam_plateau']['point'][1] - gt_point[1])**2)
     
     print(f"L-BFGS-B: Distance GT = {lbfgs_dist:.1f}px, Score = {results['lbfgs']['score']:.6f}")
-    print(f"Adam (SANS early stopping): Distance GT = {adam_basic_dist:.1f}px, Score = {results['adam_basic']['score']:.6f}")
-    print(f"Adam (AVEC pixel patience): Distance GT = {adam_pixel_dist:.1f}px, Score = {results['adam_pixel']['score']:.6f}")
+    print(f"Adam (50 iter): Distance GT = {adam_basic_dist:.1f}px, Score = {results['adam_basic']['score']:.6f}")
+    print(f"Adam (plateau): Distance GT = {adam_plateau_dist:.1f}px, Score = {results['adam_plateau']['score']:.6f}")
     
     # Identifier le meilleur
-    distances = [lbfgs_dist, adam_basic_dist, adam_pixel_dist] 
-    methods = ['L-BFGS-B', 'Adam (50 iter)', 'Adam (pixel patience)']
+    distances = [lbfgs_dist, adam_basic_dist, adam_plateau_dist] 
+    methods = ['L-BFGS-B', 'Adam (50 iter)', 'Adam (plateau)']
     best_idx = np.argmin(distances)
     
     print(f"\n🎯 MEILLEUR: {methods[best_idx]} avec {distances[best_idx]:.1f} pixels d'erreur")
@@ -406,12 +413,13 @@ def main(video_id=4, frame_idx=266):
     # Comparaisons avec L-BFGS-B
     print(f"\nComparaisons avec L-BFGS-B :")
     print(f"  Adam (50 iter): {lbfgs_dist - adam_basic_dist:+.1f} pixels")
-    print(f"  Adam (pixel patience): {lbfgs_dist - adam_pixel_dist:+.1f} pixels")
+    print(f"  Adam (plateau): {lbfgs_dist - adam_plateau_dist:+.1f} pixels")
 
 
 if __name__ == "__main__":
     # Vous pouvez modifier ces valeurs pour analyser d'autres vidéos/frames
-    VIDEO_ID = 4     # ID de la vidéo (0-4) 
-    FRAME_IDX = 266  # Index de la frame
+    VIDEO_ID = 3    # ID de la vidéo (0-4) 
+    FRAME_IDX = 146  # Index de la frame
+    SHOW_TOPOLOGICAL_MAP = True  # True = avec carte topologique (lent), False = itération rapide
     
-    main(video_id=VIDEO_ID, frame_idx=FRAME_IDX) 
+    main(video_id=VIDEO_ID, frame_idx=FRAME_IDX, show_topological_map=SHOW_TOPOLOGICAL_MAP) 

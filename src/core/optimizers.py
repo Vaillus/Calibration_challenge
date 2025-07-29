@@ -345,7 +345,7 @@ class AdamOptimizer(BaseOptimizer):
 
         # If starting point is not provided, use the center of the image
         if starting_point is None:
-            starting_point = mx.array([single_flow.shape[1] // 2, single_flow.shape[0] // 2])
+            starting_point = mx.array([single_flow.shape[1] // 2, single_flow.shape[0] // 2], dtype=mx.float32)
             
         x = starting_point
         m = mx.zeros_like(x)  # momentum

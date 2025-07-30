@@ -21,8 +21,8 @@ import time
 from src.core.flow import calculate_flow, find_separation_points
 from src.utilities.pixel_angle_converter import pixels_to_angles
 from src.core.segmentation import VehicleDetector
-from src.core.optimizers import AdamOptimizer
-from src.utilities.paths import get_labeled_dir, get_pred_dir, get_masks_dir, ensure_dir_exists
+from src.core.optimizers import AdamOptimizer, LBFGSOptimizer
+from src.utilities.paths import get_labeled_dir, get_pred_dir, get_masks_dir, ensure_dir_exists, get_unlabeled_dir
 from src.utilities.project_constants import get_project_constants
 from src.utilities.fix_predictions import fix_predictions
 from src.core.flow_filter import FlowFilterSample
@@ -50,8 +50,9 @@ def load_config(run_name: str = "default", config_path: Optional[str] = None) ->
     return {
         'prediction_method': config.get('prediction_method', 'colinearity'),
         'use_segmentation': config.get('use_segmentation', True),
+        'optimizer_type': config.get('optimizer_type', 'adam'),
         'filter_config': config.get('filter_config', None),
-        'optimizer_config': config.get('optimizer_config', None)
+        'optimizer_config': config.get('optimizer_config', {})
     }
 
 
@@ -73,18 +74,25 @@ class VideoProcessor:
         self.total_frames = 0
         self.results = []
         
-        # Initialisation filtre et optimiseur avec configs
+        # Initialisation filtre avec config
         filter_config = config.get('filter_config')
         if filter_config:
             self.filter = FlowFilterSample(filter_config)
         else:
             self.filter = FlowFilterSample()  # Utilise config par défaut
         
-        optimizer_config = config.get('optimizer_config')
-        if optimizer_config:
+        # Initialisation optimiseur selon le type choisi
+        optimizer_type = config.get('optimizer_type', 'adam').lower()
+        optimizer_config = config.get('optimizer_config', {})
+        
+        if optimizer_type == 'lbfgs':
+            self.optimizer = LBFGSOptimizer(**optimizer_config)
+            print(f"🔧 Optimiseur: L-BFGS-B avec config {optimizer_config}")
+        elif optimizer_type == 'adam':
             self.optimizer = AdamOptimizer(**optimizer_config)
+            print(f"🔧 Optimiseur: Adam avec config {optimizer_config}")
         else:
-            self.optimizer = AdamOptimizer()  # Utilise config par défaut
+            raise ValueError(f"Type d'optimiseur non supporté: {optimizer_type}. Utilisez 'adam' ou 'lbfgs'")
 
     def process_video(
         self, 
@@ -102,7 +110,10 @@ class VideoProcessor:
             True si succès, False sinon
         """
         # Create video path
-        video_path = get_labeled_dir() / f"{video_index}.hevc"
+        if video_index < 5:
+            video_path = get_labeled_dir() / f"{video_index}.hevc"
+        else:
+            video_path = get_unlabeled_dir() / f"{video_index}.hevc"
         if not os.path.exists(video_path):
             print(f"⚠️  Vidéo {video_index} introuvable")
             return False
@@ -141,7 +152,7 @@ class VideoProcessor:
         pred_run_dir = ensure_dir_exists(get_pred_dir(run_name))
         
         # Sauvegarde configuration
-        config_file = pred_run_dir / "config.json"
+        config_file = pred_run_dir / "out_config.json"
         self._save_config(config_file, run_name)
         
         return pred_run_dir
@@ -291,8 +302,27 @@ class VideoProcessor:
         if self.config['prediction_method'] == "flow":
             return find_separation_points(flow, mask)
         elif self.config['prediction_method'] == "colinearity":
-            vanishing_point = self.optimizer.optimize_single(flow, weights=weights)
-            return map(int, vanishing_point) # cleaner than converting to int element by element
+            # Adaptation des données selon le type d'optimiseur
+            optimizer_type = self.config.get('optimizer_type', 'adam').lower()
+            
+            if optimizer_type == 'lbfgs':
+                # LBFGSOptimizer attend numpy arrays
+                flow_input = np.array(flow) if not isinstance(flow, np.ndarray) else flow
+                weights_input = np.array(weights) if weights is not None and not isinstance(weights, np.ndarray) else weights
+            else:
+                # AdamOptimizer attend MLX arrays
+                flow_input = mx.array(flow) if not isinstance(flow, mx.array) else flow
+                weights_input = mx.array(weights) if weights is not None and not isinstance(weights, mx.array) else weights
+            
+            vanishing_point = self.optimizer.optimize_single(flow_input, weights=weights_input)
+            
+            # Conversion en tuple d'entiers compatible avec les deux optimiseurs
+            if isinstance(vanishing_point, tuple):
+                # LBFGSOptimizer retourne déjà un tuple
+                return tuple(map(int, vanishing_point))
+            else:
+                # AdamOptimizer retourne mx.array, conversion nécessaire
+                return tuple(map(int, vanishing_point))
         else:
             raise ValueError(f"Méthode inconnue: {self.config['prediction_method']}")
 
@@ -338,5 +368,6 @@ def main(
 
 
 if __name__ == "__main__":
-    run_name = "2_new"
-    main(run_name=run_name) 
+    run_name = "5_6"
+    video_indices = list(range(5, 10))
+    main(video_indices=video_indices, run_name=run_name) 

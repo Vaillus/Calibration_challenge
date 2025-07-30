@@ -1,0 +1,31 @@
+title: "Titre de ton blog/article"
+description: "Description de ton contenu"
+baseurl: ""  # Pour le développement local
+url: "http://localhost:4000"
+
+# Utilise remote_theme au lieu de theme
+remote_theme: "mmistakes/minimal-mistakes@4.27.2"
+
+markdown: kramdown
+kramdown:
+  math_engine: mathjax
+highlighter: rouge
+
+plugins:
+  - jekyll-feed
+  - jekyll-include-cache
+
+# Inclure les dossiers d'assets
+include:
+  - imgs
+
+# Garder les assets lors du build
+keep_files:
+  - imgs
+
+# Extensions statiques autorisées
+static_files:
+  - "*.gif"
+  - "*.png"
+  - "*.jpg"
+  - "*.jpeg" 

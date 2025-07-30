@@ -17,7 +17,10 @@ Un challenge en particulier a attiré mon attention, bien qu'il ait été publi�
 ## Le problème à résoudre
 Dans les voitures équipées du système Openpilot, un dispositif dédié comma.ai (comme le comma 3X) sert de caméra principale. Contrairement aux Tesla où les caméras sont fixées à des positions précises en usine, chaque installation d'Openpilot est unique : le dispositif peut être placé à différentes positions sur le pare-brise, avec différentes orientations. Pour que le système d'assistance à la conduite fonctionne correctement, il doit comprendre comment le dispositif et ses caméras sont orientés par rapport à la voiture. C'est ce qu'on appelle la calibration de caméra.
 
-![Openpilot](https://miro.medium.com/v2/resize:fit:1400/1*_oAenBeOAbrtmOOuVVnSfg.jpeg){: style="width: 90%;"}
+<figure>
+  <img src="https://miro.medium.com/v2/resize:fit:1400/1*_oAenBeOAbrtmOOuVVnSfg.jpeg" alt="Dispositif comma.ai dans le cockpit" style="width: 90%;" />
+  <figcaption>Exemple d'un dispositif comma.ai positionné dans le cockpit d'une voiture</figcaption>
+</figure>
 
 ## L'objectif
 Ce challenge demande de développer un algorithme qui, à partir d'une vidéo prise par le dispositif comma.ai pendant la conduite, peut déterminer dans quelle direction la voiture se déplace par rapport à l'orientation de la caméra.
@@ -43,7 +46,7 @@ Pour résoudre ce problème, j'ai accès à 10 vidéos d'une minute chacune, soi
 Chaque vidéo montre des conditions de conduite différentes (environnement, luminosité, etc.)
 <figure>
   <img src="./imgs/intro/videos.gif" alt="Aperçu des 9 vidéos du dataset" style="width: 90%;" />
-  <figcaption>Aperçu des 9 vidéos du dataset</figcaption>
+  <figcaption>Aperçu de 9 vidéos du dataset</figcaption>
 </figure>
 
 ## Critère d'évaluation
@@ -94,10 +97,14 @@ La méthode repose sur une observation fondamentale : dans un mouvement en ligne
 
 L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc donner une estimation approximativede l'épipole.
 
+<figure>
 <div style="display: flex; justify-content: space-between;">
   <img src="./imgs/1/sep_vertical.png" style="width: 48%;" />
   <img src="./imgs/1/sep_horizontal.png" style="width: 48%;" />
 </div>
+  <figcaption>Séparation verticale et horizontale de blabla</figcaption>
+
+</figure>
 
 Isolons la méthode pour trouver l'axe de séparation vertical:
 

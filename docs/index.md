@@ -485,11 +485,7 @@ Cette approche présente plusieurs avantages :
 - Efficacité conservée : Le temps de calcul moyen reste similaire à l'approche précédente.
 - Dans tous les cas observés, la prédiction est très proche du minimum global.
 
-Validation des résultats
-La figure ci-dessous illustre la différence entre différentes approches sur une frame représentative :
-![Early stopping](./imgs/5/optimizers_comp.png){: style="width: 90%;"}
 
-On observe clairement que L-BFGS-B et Adam couplé avec l'ancienne méthode d'early stopping s'arrêtait prématurément, loin du minimum global, tandis que le nouveau critère permet d'atteindre la convergence optimale. Cette amélioration de la précision d'optimisation constitue une base solide pour les raffinements ultérieurs du filtrage des vecteurs.
 ## Partie 2 : Post-processing
 Depuis le 3ème arc de ce projet, j'observe que mes prédictions d'épipole, bien qu'améliorées à chaque itération, restent très bruitées et bénéficieraient probablement d'un lissage en post-processing. J'ai décidé de garder cette optimisation pour la fin du projet comme "cerise sur le gâteau" pour un petit bonus de performance.
 

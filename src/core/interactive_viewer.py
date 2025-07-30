@@ -20,7 +20,8 @@ from src.utilities.paths import (
     get_masks_dir, 
     get_pred_dir, 
     get_flows_dir, 
-    ensure_dir_exists
+    ensure_dir_exists,
+    get_unlabeled_dir
 )
 
 # Constants
@@ -246,6 +247,14 @@ def setup_manual_segmentation(video_index, first_frame, frame_height, frame_widt
     while True:
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
+            # Save mask if there are points drawn, even if mouse wasn't released
+            if len(state.points) > 1 and state.manual_mask is None:
+                print("Sauvegarde du masque en cours...")
+                state.manual_mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
+                points_array = np.array(state.points, dtype=np.int32)
+                cv2.fillPoly(state.manual_mask, [points_array], 255)
+                cv2.imwrite(str(state.mask_path), state.manual_mask)
+                print(f"Masque sauvegardé dans {state.mask_path}")
             break
     
     return state
@@ -458,7 +467,11 @@ def update_visualization(state, gt_pixels, gt_angles, pred_pixels, show_vp=True)
 
 def main(video_index, start_frame, predictions_dir="3", show_vp=True):
     # Get video path
-    video_path = get_labeled_dir() / f'{video_index}.hevc'
+    if video_index < 5:
+        video_path = get_labeled_dir() / f'{video_index}.hevc'
+    else:
+        video_path = get_unlabeled_dir() / f'{video_index}.hevc'
+
     
     # Initialize video
     try:
@@ -477,9 +490,15 @@ def main(video_index, start_frame, predictions_dir="3", show_vp=True):
         return
     
     # Load ground truth, predictions and flows
-    gt_pixels, gt_angles = load_ground_truth(video_index, frame_width, frame_height)
-    pred_pixels = load_predictions(video_index, frame_width, frame_height, predictions_dir)
-    flows = load_flows(video_index)
+    if video_index < 5:
+        gt_pixels, gt_angles = load_ground_truth(video_index, frame_width, frame_height)
+        pred_pixels = load_predictions(video_index, frame_width, frame_height, predictions_dir)
+        flows = load_flows(video_index)
+    else:
+        gt_pixels = []
+        gt_angles = []
+        pred_pixels = []
+        flows = []
     
     # Position video at start frame
     success, first_frame = position_video_at_frame(cap, start_frame)
@@ -553,8 +572,8 @@ def main(video_index, start_frame, predictions_dir="3", show_vp=True):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    video_index = 4
+    video_index = 9
     start_frame = 0
-    predictions_dir = "7"  # Change this to use different prediction directories (e.g., "3", "5", "vanilla", etc.)
+    predictions_dir = "5_7_smoothed"  # Change this to use different prediction directories (e.g., "3", "5", "vanilla", etc.)
     show_vp = False  # Set to False to disable vanishing point calculation and display
     main(video_index, start_frame, predictions_dir, show_vp)

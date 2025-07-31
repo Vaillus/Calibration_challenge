@@ -205,7 +205,7 @@ $$s(p) = \hat{v}(p) \cdot \hat{d}(p)$$
 Ce produit scalaire vaut 1 si les vecteurs sont parfaitement alignés, 0 s'ils sont perpendiculaires, et -1 s'ils pointent dans des directions opposées.
 
 <figure>
-  <img src="./imgs/3/collinearity_concept.gif" alt="Score de colinéarité" style="width: 70%;" />
+  <img src="./imgs/3/collinearity_concept.gif" alt="Score de colinéarité" style="width: 90%;" />
   <figcaption>Exemple de calcul du score de colinéarité pour un pixel</figcaption>
 </figure>
 
@@ -215,7 +215,7 @@ $$S(e) = \frac{1}{|P|} \sum_{p \in P} s(p)$$
 Où P est l'ensemble des pixels dans l'image.
 
 <figure>
-  <img src="./imgs/3/global_collinearity_score.gif" alt="Score de colinéarité global" style="width: 70%;" />
+  <img src="./imgs/3/global_collinearity_score.gif" alt="Score de colinéarité global" style="width: 90%;" />
   <figcaption>Exemple de calcul du score de colinéarité global pour un point candidat</figcaption>
 </figure>
 
@@ -232,7 +232,7 @@ Pour améliorer la robustesse de mon estimation, j'ai donc décidé d'appliquer 
 En visualisant ce score pour différentes positions candidates, j'observe que la fonction présente généralement une forme concave après filtrage approprié:
 
 <figure>
-  <img src="./imgs/3/convex_function.png" alt="Score de colinéarité global" style="width: 70%;" />
+  <img src="./imgs/3/convex_function.png" alt="Score de colinéarité global" style="width: 90%;" />
   <figcaption>Visualisation du score de colinéarité global pour des positions candidates couvrant toute l'image</figcaption>
 </figure>
 
@@ -255,7 +255,7 @@ Cette amélioration significative valide l'approche combinée: nouveau critère 
 
 
 <figure markdown>
-  <img src="./imgs/3/final_viz.gif" alt="GIF de prédictions" style="width: 70%;" />
+  <img src="./imgs/3/final_viz.gif" alt="GIF de prédictions" style="width: 90%;" />
   <figcaption>Exemple de prédiction avec la méthode de l'arc 3</figcaption>
 </figure>
 
@@ -359,7 +359,7 @@ En analysant ce phénomène surprenant, j'ai compris que converger jusqu'au fond
 Cette stratégie d'arrêt prématuré s'est donc révélée doublement bénéfique : accélération du calcul ET amélioration de la précision.
 
 <figure>
-  <img src="./imgs/4/optimizer_comp.png" alt="GIF de prédictions" style="width: 70%;" />
+  <img src="./imgs/4/optimizer_comp.png" alt="GIF de prédictions" style="width: 90%;" />
   <figcaption>Trajectoires de différents optimisateurs pour une frame</figcaption>
 </figure>
 
@@ -396,14 +396,14 @@ L'exploration de l'espace des paramètres a permis d'identifier les valeurs suiv
 - **Seuil de norme** : 13
 
 <figure>
-  <img src="./imgs/4/effet_filtrage.png" alt="Comparaison des filtres" style="width: 70%;" />
-  <figcaption>Comparaison de paramètres de filtrage</figcaption>
+  <img src="./imgs/4/effet_filtrage.png" alt="Comparaison des filtres" style="width: 90%;" />
+  <figcaption>Comparaison de champs de vecteurs de flux optique pour différents paramètres de filtrage</figcaption>
 </figure>
 
-Ces paramètres ont produit un **score de 54.32%**, représentant une amélioration significative de ?????% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
+Ces paramètres ont produit un **score de 54.32%**, représentant une amélioration significative de 60% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
 
 <figure markdown>
-  <img src="./imgs/4/final_viz.gif" alt="GIF de prédictions" style="width: 70%;" />
+  <img src="./imgs/4/final_viz.gif" alt="GIF de prédictions" style="width: 90%;" />
   <figcaption>Exemple de prédiction avec la méthode de l'arc 4</figcaption>
 </figure>
 
@@ -424,7 +424,7 @@ où :
 - α : raideur/pente de la transition
 
 <figure>
-  <img src="./imgs/5/sigmoid.png" alt="Fonction sigmoïde" style="width: 70%;" />
+  <img src="./imgs/5/sigmoid.png" alt="Fonction sigmoïde" style="width: 90%;" />
   <figcaption>Fonction sigmoïde</figcaption>
 </figure>
 
@@ -433,7 +433,7 @@ D'une part, elle englobe naturellement les cas extrêmes : un paramètre $k$ tr�
 D'autre part, elle se limite à seulement deux paramètres à optimiser, préservant ainsi la tractabilité de l'espace de recherche.
 
 <figure>
-  <img src="./imgs/5/sigmoids.gif" alt="Fonctions sigmoïde" style="width: 70%;" />
+  <img src="./imgs/5/sigmoids.gif" alt="Fonctions sigmoïde" style="width: 90%;" />
   <figcaption>Fonction sigmoïde pour différents paramètres de seuil et de raideur</figcaption>
 </figure>
 
@@ -638,7 +638,7 @@ Les paramètres optimaux identifiés sont :
 Cela donne des filtres sigmoïdaux qui ressemblent à ceci :
 
 <figure>
-  <img src="./imgs/5/sigmoids_opti.png" alt="Fonctions sigmoïde" style="width: 70%;" />
+  <img src="./imgs/5/sigmoids_opti.png" alt="Fonctions sigmoïde" style="width: 90%;" />
   <figcaption>Fonctions sigmoïde pour les paramètres optimaux des filtres de norme et de colinéarité</figcaption>
 </figure>
 

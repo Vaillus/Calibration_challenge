@@ -102,7 +102,7 @@ L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changen
   <img src="./imgs/1/sep_vertical.png" style="width: 48%;" />
   <img src="./imgs/1/sep_horizontal.png" style="width: 48%;" />
 </div>
-  <figcaption>Séparation verticale et horizontale de blabla</figcaption>
+  <figcaption>Séparation verticale et horizontale des vecteurs de flux optique</figcaption>
 
 </figure>
 
@@ -137,16 +137,17 @@ J'ai notamment identifié plusieurs éléments qui handicapent gravement la pré
 ## Problèmes identifiés avec la méthode précédente
 Avec la méthode précédente basée uniquement sur le flux optique, certaines frames donnent des résultats acceptables, mais l'ensemble est très bruité. Dans certains cas, l'algorithme échoue complètement comme on peut le voir dans ces exemples:
 <div style="display: flex; justify-content: space-between;">
-  <img src="./imgs/2/sep_real_1.png" style="width: 48%;" />
-  <img src="./imgs/2/sep_heatm_1.png" style="width: 48%;" />
-</div>
-**Exemple 1 - Le capot de la voiture:** On observe ici que le capot de la voiture reflète le décor (les tâches bleues claires en bas de la figure à droite), créant des vecteurs qui pointent vers le haut alors qu'ils sont situés en bas de l'image. Cela pousse artificiellement la ligne de séparation horizontale vers le bas, faussant complètement l'estimation de l'épipole.
-
-<div style="display: flex; justify-content: space-between;">
   <img src="./imgs/2/sep_real_2.png" style="width: 48%;" />
   <img src="./imgs/2/sep_heatm_2.png" style="width: 48%;" />
 </div>
-**Exemple 2 - Véhicules en mouvement:** Dans ce second cas, c'est une camionnette qui double notre voiture qui crée des vecteurs orientés vers la droite alors qu'ils sont situés à gauche de l'écran (le tâches rougez à gauche de la figure de gauche). La ligne de séparation verticale se retrouve alors collée à l'extrémité gauche, produisant une estimation aberrante.
+**Exemple 1 - Véhicules en mouvement:** Dans ce premier cas, une camionnette double la voiture, créant des vecteurs orientés vers la droite alors qu'ils sont situés à gauche de l'écran (les tâches rouges à gauche de la figure de gauche). La ligne de séparation verticale se retrouve alors collée à l'extrémité gauche, produisant une estimation aberrante.
+
+<div style="display: flex; justify-content: space-between;">
+  <img src="./imgs/2/sep_real_1.png" style="width: 48%;" />
+  <img src="./imgs/2/sep_heatm_1.png" style="width: 48%;" />
+</div>
+**Exemple 2 - Le capot de la voiture:** On observe ici que le capot de la voiture reflète le décor (les tâches bleues claires en bas de la figure à droite), créant des vecteurs qui pointent vers le haut alors qu'ils sont situés en bas de l'image. Cela pousse artificiellement la ligne de séparation horizontale vers le bas. Bien que moins prononcé que dans le premier exemple, cela fausse également l'estimation de l'épipole.
+
 
 La solution devient évidente: il faut segmenter et ignorer à la fois le capot de la voiture et les éléments mobiles du décor (autres véhicules, piétons) susceptibles de fausser notre estimation.
 
@@ -169,7 +170,14 @@ J'ai été initialement attiré par les capacités de SAM 2, mais j'ai rapidemen
 
 J'ai donc opté pour YOLOv8-seg, qui s'est avéré rapide et globalement efficace pour la détection et la segmentation des véhicules:
 
-![YOLOv8-seg](./imgs/2/yolo_seg.png){: style="width: 90%;"}
+<figure>
+  <img src="./imgs/2/yolo_seg.png" alt="YOLOv8-seg" style="width: 90%;" />
+  <figcaption>Exemple de détection et de segmentation de véhicules avec YOLOv8-seg</figcaption>
+</figure>
+
+J'ai configuré YOLO pour qu'il segmente uniquement les véhicules, en excluant les éléments statiques du décor comme les feux tricolores, bien qu'il soit aussi capable de les détecter.
+
+
 ### Segmentation manuelle du capot
 Un problème persistait cependant: YOLOv8 ne détecte pas le capot de la voiture, puisqu'il n'est pas entraîné pour cette tâche spécifique. J'ai donc développé rapidement une interface simple me permettant de segmenter manuellement le capot sur la première frame de chaque vidéo. Cette segmentation manuelle est ensuite appliquée à toutes les frames de la vidéo correspondante.
 ## Résultats et amélioration des performances
@@ -196,14 +204,20 @@ $$\hat{d}(p) = \frac{e - p}{\|e - p\|}$$
 $$s(p) = \hat{v}(p) \cdot \hat{d}(p)$$
 Ce produit scalaire vaut 1 si les vecteurs sont parfaitement alignés, 0 s'ils sont perpendiculaires, et -1 s'ils pointent dans des directions opposées.
 
-![Score de colinéarité](./imgs/3/collinearity_concept.gif){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/3/collinearity_concept.gif" alt="Score de colinéarité" style="width: 70%;" />
+  <figcaption>Exemple de calcul du score de colinéarité pour un pixel</figcaption>
+</figure>
 
 
 Le score de colinéarité global pour un point candidat e est alors la moyenne de ces scores individuels :
 $$S(e) = \frac{1}{|P|} \sum_{p \in P} s(p)$$
 Où P est l'ensemble des pixels dans l'image.
 
-![Score de colinéarité global](./imgs/3/global_collinearity_score.gif){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/3/global_collinearity_score.gif" alt="Score de colinéarité global" style="width: 70%;" />
+  <figcaption>Exemple de calcul du score de colinéarité global pour un point candidat</figcaption>
+</figure>
 
 Puisque les vecteurs de flux optique devraient pointer dans la direction opposée au vecteur allant du pixel à l'épipole (pour les objets stationnaires), l'objectif est de trouver le point $e^*$ qui minimise ce score :
 $$e^* = \arg\min_{e} S(e)$$
@@ -217,7 +231,10 @@ Pour améliorer la robustesse de mon estimation, j'ai donc décidé d'appliquer 
 ### Méthode d'optimisation
 En visualisant ce score pour différentes positions candidates, j'observe que la fonction présente généralement une forme concave après filtrage approprié:
 
-![Score de colinéarité global](./imgs/3/convex_function.png){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/3/convex_function.png" alt="Score de colinéarité global" style="width: 70%;" />
+  <figcaption>Visualisation du score de colinéarité global pour des positions candidates couvrant toute l'image</figcaption>
+</figure>
 
 Cette observation m'a conduit à traiter ce problème comme une optimisation par descente de gradient - une approche naturelle pour trouver le minimum d'une fonction concave.
 
@@ -236,7 +253,11 @@ Cette méthode donne une performance de **168.83%**, ce qui représente une amé
 
 Cette amélioration significative valide l'approche combinée: nouveau critère de colinéarité, méthode d'optimisation par descente de gradient, et paramétrage optimisé du flux optique.
 
-![GIF de prédictions](./imgs/3/final_viz.gif){: style="width: 70%;"}
+
+<figure markdown>
+  <img src="./imgs/3/final_viz.gif" alt="GIF de prédictions" style="width: 70%;" />
+  <figcaption>Exemple de prédiction avec la méthode de l'arc 3</figcaption>
+</figure>
 
 Voilà du progrès !
 # 4ème arc : filtrage des vecteurs
@@ -270,7 +291,10 @@ Il faut donc que je trouve un moyen d'accélérer drastiquement l'évaluation de
 #### Retour sur la pipeline de prédiction
 Pour trouver l'épipole sur une frame, ma méthode actuelle suit une pipeline séquentielle en trois modules :
 
-![Pipeline](./imgs/4/pipeline.png){: style="width: 90%;"}
+<figure>
+  <img src="./imgs/4/pipeline.png" alt="Pipeline" style="width: 90%;" />
+  <figcaption>Pipeline de prédiction de l'épipole</figcaption>
+</figure>
 
 **Module 1 : Génération du flux optique** - À partir de deux frames consécutives, je calcule le champ de vecteurs de flux optique avec l'algorithme de Farneback d'OpenCV, puis j'applique la segmentation pour éliminer les vecteurs correspondant aux véhicules en mouvement et au capot de la voiture.
 
@@ -334,7 +358,10 @@ En analysant ce phénomène surprenant, j'ai compris que converger jusqu'au fond
 
 Cette stratégie d'arrêt prématuré s'est donc révélée doublement bénéfique : accélération du calcul ET amélioration de la précision.
 
-![GIF de prédictions](./imgs/4/optimizer_comp.png){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/4/optimizer_comp.png" alt="GIF de prédictions" style="width: 70%;" />
+  <figcaption>Trajectoires de différents optimisateurs pour une frame</figcaption>
+</figure>
 
 À ce stade, je privilégiais la vitesse d'exploration : valider rapidement que l'approche fonctionnait avant de peaufiner les détails. Cette stratégie pragmatique s'est avérée suffisante pour passer à l'étape suivante, où une évaluation plus rigoureuse deviendrait nécessaire.
 #### Conclusion
@@ -368,11 +395,17 @@ L'exploration de l'espace des paramètres a permis d'identifier les valeurs suiv
 - **Seuil de colinéarité** : 0.96
 - **Seuil de norme** : 13
 
-![Comparaison des filtres](./imgs/4/effet_filtrage.png){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/4/effet_filtrage.png" alt="Comparaison des filtres" style="width: 70%;" />
+  <figcaption>Comparaison de paramètres de filtrage</figcaption>
+</figure>
 
 Ces paramètres ont produit un **score de 54.32%**, représentant une amélioration significative de ?????% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
 
-![GIF de prédictions](./imgs/4/final_viz.gif){: style="width: 70%;"}
+<figure markdown>
+  <img src="./imgs/4/final_viz.gif" alt="GIF de prédictions" style="width: 70%;" />
+  <figcaption>Exemple de prédiction avec la méthode de l'arc 4</figcaption>
+</figure>
 
 # 5ème arc : amélioration du filtrage et post-processing
 ## Partie 1 : améliorations du pipeline
@@ -390,13 +423,19 @@ où :
 - θ : seuil/centre de la sigmoïde
 - α : raideur/pente de la transition
 
-![Fonction sigmoïde](./imgs/5/sigmoid.png){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/5/sigmoid.png" alt="Fonction sigmoïde" style="width: 70%;" />
+  <figcaption>Fonction sigmoïde</figcaption>
+</figure>
 
 Cette formulation présente plusieurs avantages déterminants. 
 D'une part, elle englobe naturellement les cas extrêmes : un paramètre $k$ très élevé reproduit un filtrage binaire classique (eg. le filtre "dur" mentionné précédemment est exprimé par $sig(x,13,\infty)$), tandis qu'une valeur de $k$ faible génère une pondération linéaire. 
 D'autre part, elle se limite à seulement deux paramètres à optimiser, préservant ainsi la tractabilité de l'espace de recherche.
 
-![Fonctions sigmoïde](./imgs/5/sigmoids.gif){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/5/sigmoids.gif" alt="Fonctions sigmoïde" style="width: 70%;" />
+  <figcaption>Fonction sigmoïde pour différents paramètres de seuil et de raideur</figcaption>
+</figure>
 
 Cette généralité permet d'explorer de manière unifiée différentes stratégies de filtrage, simplifiant considérablement le processus d'expérimentation.
 
@@ -461,7 +500,10 @@ Cette approche visait à découvrir des patterns géométriques récurrents auto
 ##### Résultats obtenus
 **Heatmaps absolues par vidéo (Approche 1) :**
 Sur l'image suivante on peut voir la moyenne des scores de collinéarité par vidéo en coordonnées absolues :
-![Heatmap absolue par vidéo](./imgs/5/abs_heatm_per_video.png){: style="width: 90%;"}
+<figure>
+  <img src="./imgs/5/abs_heatm_per_video.png" alt="Heatmap absolue par vidéo" style="width: 90%;" />
+  <figcaption>Heatmap absolue par vidéo</figcaption>
+</figure>
 Observations :
 - Des motifs se répètent : en bas de chaque image, une région blanche correspond au masque du capot de la voiture où les scores n'ont pas été calculés
 - Des rais jaunes se distinguent nettement sous le point central des images 0, 1 et 4
@@ -469,12 +511,19 @@ Observations :
 
 **Heatmap absolue globale (Approche 1) :**
 Sur l'image suivante, on peut voir la moyenne des scores de collinéarité par pixel absolu, sur l'ensemble des vidéos :
-![Heatmap absolue globale](./imgs/5/abs_heatm_global.png){: style="width: 90%;"}
+<figure>
+  <img src="./imgs/5/abs_heatm_global.png" alt="Heatmap absolue globale" style="width: 90%;" />
+  <figcaption>Heatmap absolue globale</figcaption>
+</figure>
 Un motif clair similaire à celui apparaissant sur les images 0, 1 et 4 apparaît sur l'image globale.
 
 **Heatmap relative globale (Approche 2) :**
 J'ai également implémenté et testé cette approche pour voir si elle révélerait des patterns plus informatifs que l'approche absolue:
-![Heatmap relative globale](./imgs/5/rel_heatm_global.png){: style="width: 90%;"}
+
+<figure>
+  <img src="./imgs/5/rel_heatm_global.png" alt="Heatmap relative globale" style="width: 90%;" />
+  <figcaption>Heatmap relative globale</figcaption>
+</figure>
 
 On observe que les patterns sont beaucoup moins nets que dans l'approche absolue. Par conséquent, j'ai décidé de conserver l'approche de la heatmap absolue globale pour la suite.
 ##### Utilisation de la heatmap absolue pour le filtrage
@@ -588,7 +637,10 @@ Les paramètres optimaux identifiés sont :
 
 Cela donne des filtres sigmoïdaux qui ressemblent à ceci :
 
-![Fonctions sigmoïde](./imgs/5/sigmoids_opti.png){: style="width: 70%;"}
+<figure>
+  <img src="./imgs/5/sigmoids_opti.png" alt="Fonctions sigmoïde" style="width: 70%;" />
+  <figcaption>Fonctions sigmoïde pour les paramètres optimaux des filtres de norme et de colinéarité</figcaption>
+</figure>
 
 On observe qu'on est resté sur un filtre "dur" pour le filtre de norme. En revanche, le filtre de colinéarité ressemble plus à une exponentielle décollant autour de 0.975.
 
@@ -615,19 +667,21 @@ On observe que lisser les prédictions avec la moyenne exponentielle bi-directio
 
 **Résultat final : 8.58%** avec la méthode de lissage exponentiel bi-directionnel.
 
-<div style="text-align: center; margin-bottom: 20px;">
-  <h4>Comparaison des résultats finaux</h4>
+<figure markdown>
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div style="width: 48%; text-align: center;">
-      <h5>Point de référence : Centre de l'image</h5>
+      <span style="font-weight: bold;">Point de référence : Centre de l'image</span><br>
       <img src="./imgs/5/final_viz_center.gif" alt="GIF de prédictions - Centre" style="width: 100%;">
     </div>
     <div style="width: 48%; text-align: center;">
-      <h5>Point de référence : Moyenne de l'expérience précédente</h5>
+      <span style="font-weight: bold;">Point de référence : Moyenne de l'expérience précédente</span><br>
       <img src="./imgs/5/final_viz_mean.gif" alt="GIF de prédictions - Moyenne" style="width: 100%;">
     </div>
   </div>
-</div>
+  <figcaption style="text-align: center; margin-bottom: 10px;">
+    <strong>Comparaison des résultats finaux</strong>
+  </figcaption>
+</figure>
 
 Sur la figure ci-dessus, visuellement, je tends à préférer la méthode utilisant le point de référence au centre de l'image car elle semble plus réactive aux changements de direction du véhicule bien que l'erreur par rapport au label soit plus élevée.
 Je soupçonne par conséquent que les labels ne sont pas parfaitement fiables car trop centrés autour de leur valeur moyenne.

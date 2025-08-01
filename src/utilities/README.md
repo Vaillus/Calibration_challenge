@@ -1,38 +1,35 @@
-# 🛠️ Utilities
+# Utilities
 
-Outils de support pour le projet calib_challenge.
+This directory contains support tools and helper functions for the `calib_challenge` project.
 
-## 📁 Modules
+## Modules
 
-### `paths.py`
-Gestion centralisée des chemins du projet.
+### Project Setup and Constants
+- **`paths.py`**: Centralized management of all project paths.
+- **`project_constants.py`**: Defines global constants used throughout the project, such as focal length.
 
-### `ground_truth.py`
-Lecture et conversion des données de référence (angles et pixels).
+### Data Loading
+- **`load_ground_truth.py`**: Loads and converts ground truth data (angles and pixels).
+- **`load_flows.py`**: Loads pre-computed optical flows (supports both `.npy` and compressed `.npz` formats).
+- **`load_video_frame.py`**: Provides a reliable way to load video frames, especially for HEVC-encoded videos.
+- **`load_predictions.py`**: Loads epipole predictions from output files.
+- **`load_mean_point.py`**: Loads the average prediction point for a given video.
 
-### `pixel_angle_converter.py`
-Conversion entre repères Car et Camera (angles ↔ pixels).
+### Data Generation and Preprocessing
+- **`generate_flows.py`**: Generates optical flow fields with intelligent masking of moving objects and the car hood.
+- **`create_mixed_batch.py`**: Creates a balanced test dataset by sampling frames from different error deciles.
+- **`convert_to_float16.py`**: Compresses optical flow fields to float16 to optimize disk space.
 
-### `generate_flows.py`
-Génération des flux optiques avec masquage intelligent.
+### Heatmaps
+- **`heatmap_generator.py`**: Generates heatmaps of collinearity scores to analyze spatial patterns.
+- **`heatmap_loader.py`**: Loads and processes the generated heatmaps for use in filtering.
 
-### `load_flows.py`
-Chargement des flux optiques (formats .npy et .npz compressé).
+### Evaluation and Analysis
+- **`eval.py`**: Evaluates predictions and calculates final scores.
+- **`filter_config_evaluator.py`**: A comprehensive tool for evaluating the performance of different filtering configurations.
+- **`worst_errors.py`**: Identifies and analyzes the frames with the highest prediction errors.
+- **`extract_means.py`**: Converts angle predictions to pixel coordinates and calculates their mean values.
+- **`pixel_angle_converter.py`**: Converts coordinates between the camera's frame of reference (pixels) and the car's frame of reference (angles).
 
-### `load_video_frame.py`
-Chargement fiable des frames vidéo, particulièrement adapté pour les vidéos HEVC.
-
-### `extract_means.py`
-Conversion des prédictions d'angles en pixels et calcul des moyennes.
-
-### `eval.py`
-Évaluation des prédictions et calcul des scores.
-
-### `fix_predictions.py`
-Duplication de la première prédiction pour la frame 0 manquante.
-
-### `create_mixed_batch.py`
-Création d'un dataset de test équilibré par déciles d'erreur.
-
-### `convert_to_float16.py`
-Compression des flux optiques en float16 pour optimiser l'espace disque.
+### Post-processing
+- **`fix_predictions.py`**: Fills in missing predictions for the first frame by duplicating the prediction from the second frame.

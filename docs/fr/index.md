@@ -2,10 +2,11 @@
 title: "Calibration de caméra embarquée dans une voiture semi-autonome"
 layout: dynamic_toc
 mathjax: true
+lang: fr
 ---
 
 # Introduction
-Ce document a pour but de retracer mon cheminement dans ma quête de résoudre le challenge de calibration de d'une caméra embarquée dans une voiture semi-autonome. 
+Bienvenue sur mon blog ! J'ai récemment entrepris de résoudre le challenge de calibration de caméra de Comma.ai, un problème de vision par ordinateur passionnant dans le monde de la conduite semi-autonome. Mon approche m'a finalement permis de me hisser à la Xème place du classement, et j'ai eu envie de partager cette expérience. Cet article retrace donc mon parcours, en expliquant pas à pas comment j'ai fait pour résoudre ce défi technique.
 ## Contexte
 Comma.ai est une entreprise qui cherche à démocratiser la conduite autonome. Là où Tesla vend des voitures complètes, comma.ai développe Openpilot : un système open-source qui transforme votre voiture existante en véhicule semi-autonome.
 
@@ -45,7 +46,7 @@ Pour résoudre ce problème, j'ai accès à 10 vidéos d'une minute chacune, soi
 5 vidéos sont labellisées avec les angles corrects déjà identifiés, et 5 vidéos sont non labellisées.
 Chaque vidéo montre des conditions de conduite différentes (environnement, luminosité, etc.)
 <figure>
-  <img src="./imgs/intro/videos.gif" alt="Aperçu des 9 vidéos du dataset" style="width: 90%;" />
+  <img src="../imgs/intro/videos.gif" alt="Aperçu des 9 vidéos du dataset" style="width: 90%;" />
   <figcaption>Aperçu de 9 vidéos du dataset</figcaption>
 </figure>
 
@@ -71,7 +72,7 @@ Ce point central depuis lequel tout semble diverger est précisément l'épipole
 
 Cette relation fondamentale fait du flux optique un outil naturel pour localiser l'épipole.
 # 1er arc : Flux optique
-Pour démarrer mon exploration, j'ai d'abord voulu établir une baseline avec l'approche la plus directe et intuitive possible. Dans cet arc, j'introduis le flux optique - une technique fondamentale qui restera au cœur de toutes mes approches tout au long de ce projet. En revanche, la méthode d'estimation de l'épipole que je présente ici est une première tentative simple, destinée à servir de point de comparaison pour les techniques plus sophistiquées que j'explorerai par la suite.
+Pour démarrer mon exploration, j'ai d'abord voulu établir une baseline avec l'approche la plus directe et intuitive possible. Dans cet arc, j'introduis le flux optique - une technique fondamentale qui restera au cœur de toutes mes approches tout au long de ce projet. 
 ## Implémentation du flux optique
 Maintenant que le lien conceptuel entre flux optique et épipole est établi, il me fallait choisir comment implémenter concrètement cette approche pour exploiter cette relation géométrique.
 
@@ -83,7 +84,7 @@ N'ayant pas de contrainte forte de temps de calcul et souhaitant mesurer le mouv
 ### Visualisation
 J'ai donc implémenté le calcul du flux optique dense entre frames consécutives, ce qui produit un champ de vecteurs comme illustré ci-dessous :
 <figure>
-  <img src="./imgs/1/flow_vector_example.png" alt="Exemple de champ de vecteurs de flux optique" style="width: 90%;" />
+  <img src="../imgs/1/flow_vector_example.png" alt="Exemple de champ de vecteurs de flux optique" style="width: 90%;" />
   <figcaption>Visualisation du champ de vecteurs de flux optique dense calculé entre deux frames consécutives</figcaption>
 </figure>
 
@@ -95,12 +96,12 @@ Sur cette visualisation, chaque flèche représente le déplacement apparent d'u
 
 La méthode repose sur une observation fondamentale : dans un mouvement en ligne droite, les vecteurs de flux optique tendent à "s'écarter" du point vers lequel le véhicule se dirige (l'épipole). J'ai donc cherché à localiser ce point de convergence en analysant séparément les composantes horizontales et verticales du flux.
 
-L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc donner une estimation approximativede l'épipole.
+L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changent de direction, tant horizontalement que verticalement. Verticalement, au-dessus de l'épipole, les vecteurs pointent majoritairement vers le haut, tandis qu'en dessous, ils pointent vers le bas. De même horizontalement, à gauche de l'épipole, ils pointent vers la gauche, et à droite, vers la droite. L'intersection de ces deux lignes de changement de direction devrait donc donner une estimation approximative de l'épipole.
 
 <figure>
 <div style="display: flex; justify-content: space-between;">
-  <img src="./imgs/1/sep_vertical.png" style="width: 48%;" />
-  <img src="./imgs/1/sep_horizontal.png" style="width: 48%;" />
+  <img src="../imgs/1/sep_vertical.png" style="width: 48%;" />
+  <img src="../imgs/1/sep_horizontal.png" style="width: 48%;" />
 </div>
   <figcaption>Séparation verticale et horizontale des vecteurs de flux optique</figcaption>
 
@@ -108,16 +109,16 @@ L'idée est simple : l'épipole correspond à l'endroit où les vecteurs changen
 
 Isolons la méthode pour trouver l'axe de séparation vertical:
 
-1. Pour chaque colonne $j$, je calcule la moyenne des composantes horizontales des vecteurs :
-   $$m_j = \frac{1}{H} \sum_{i=1}^{H} v_{i,j}^x$$
-   où $H$ est la hauteur de l'image et $v_{i,j}^x$ est la composante horizontale du vecteur à la position $(i,j)$.
+1. Pour chaque colonne $j$, je calcule la moyenne $m_j$ des composantes horizontales des vecteurs :
+   $$m_j = \frac{1}{H} \sum_{i=1}^{H} x_{i,j}$$
+   où $H$ est la hauteur de l'image et $x_{i,j}$ est la composante horizontale du vecteur à la position $(i,j)$.
 
 2. Pour chaque position potentielle de séparation $s$, je calcule la différence entre les moyennes à droite et à gauche :
-   $$\text{diff}(s) = \sum_{j=s+1}^{W} m_j - \sum_{j=1}^{s} m_j$$
+   $$\delta(j') = \sum_{j=j'+1}^{W} m_j - \sum_{j=1}^{j'} m_j$$
    où $W$ est la largeur de l'image.
 
-3. Je sélectionne la position $s^*$ qui maximise cette différence :
-   $$s^* = \arg\max_s \text{diff}(s)$$
+3. Je sélectionne la position $j^*$ qui maximise cette différence :
+   $$j^* = \arg\max_j \delta(j)$$
 
 En appliquant cette méthode pour les axes horizontal et vertical, j'obtiens les coordonnées de ma première estimation de l'épipole en calculant le point d'intersection entre les deux lignes de séparation.
 
@@ -126,10 +127,10 @@ Avec cette méthode très simple, j'obtiens ma baseline - un score de **1960.20%
 
 Bien que les figures présentées un peu plus haut montrent une séparation relativement claire sur certaines frames, cette méthode échoue complètement sur de nombreuses autres situations. Dans ces cas problématiques, les lignes de séparation se retrouvent collées aux bords de l'image, produisant des prédictions aberrantes. 
 
-J'ai notamment identifié plusieurs éléments qui handicapent gravement la prédiction de l'épipole avec cette technique, comme le capot de la voiture et les autres véhicules en mouvement dans la scène. Ce sont précisément ces problèmes que je vais adresser dans la section suivante.
+J'ai notamment identifié plusieurs éléments qui handicapent la prédiction de l'épipole avec cette technique, comme le capot de la voiture et les autres véhicules en mouvement dans la scène. Ce sont précisément ces problèmes que je vais adresser dans la section suivante.
 
 <figure>
-  <img src="./imgs/1/final_viz.gif" alt="Exemple de prédiction avec la méthode de l'arc 1" style="width: 90%;" />
+  <img src="../imgs/1/final_viz.gif" alt="Exemple de prédiction avec la méthode de l'arc 1" style="width: 90%;" />
   <figcaption>Exemple de prédiction avec la méthode de l'arc 1</figcaption>
 </figure>
 
@@ -137,14 +138,14 @@ J'ai notamment identifié plusieurs éléments qui handicapent gravement la pré
 ## Problèmes identifiés avec la méthode précédente
 Avec la méthode précédente basée uniquement sur le flux optique, certaines frames donnent des résultats acceptables, mais l'ensemble est très bruité. Dans certains cas, l'algorithme échoue complètement comme on peut le voir dans ces exemples:
 <div style="display: flex; justify-content: space-between;">
-  <img src="./imgs/2/sep_real_2.png" style="width: 48%;" />
-  <img src="./imgs/2/sep_heatm_2.png" style="width: 48%;" />
+  <img src="../imgs/2/sep_real_2.png" style="width: 48%;" />
+  <img src="../imgs/2/sep_heatm_2.png" style="width: 48%;" />
 </div>
 **Exemple 1 - Véhicules en mouvement:** Dans ce premier cas, une camionnette double la voiture, créant des vecteurs orientés vers la droite alors qu'ils sont situés à gauche de l'écran (les tâches rouges à gauche de la figure de gauche). La ligne de séparation verticale se retrouve alors collée à l'extrémité gauche, produisant une estimation aberrante.
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="./imgs/2/sep_real_1.png" style="width: 48%;" />
-  <img src="./imgs/2/sep_heatm_1.png" style="width: 48%;" />
+  <img src="../imgs/2/sep_real_1.png" style="width: 48%;" />
+  <img src="../imgs/2/sep_heatm_1.png" style="width: 48%;" />
 </div>
 **Exemple 2 - Le capot de la voiture:** On observe ici que le capot de la voiture reflète le décor (les tâches bleues claires en bas de la figure à droite), créant des vecteurs qui pointent vers le haut alors qu'ils sont situés en bas de l'image. Cela pousse artificiellement la ligne de séparation horizontale vers le bas. Bien que moins prononcé que dans le premier exemple, cela fausse également l'estimation de l'épipole.
 
@@ -154,16 +155,11 @@ La solution devient évidente: il faut segmenter et ignorer à la fois le capot 
 ## Choix des méthodes de segmentation
 Après une brève recherche, j'ai identifié deux algorithmes prometteurs pour la segmentation:
 ### SAM 2 de Meta
-**Avantages:**
-- Modèle de segmentation très général et polyvalent
-- Capable de segmenter presque n'importe quel objet
-**Inconvénients:**
-- Très lent, inadapté pour des applications temps réel
-- Exigeant en ressources matérielles
+SAM 2 de Meta est un modèle de segmentation très général, capable de traiter presque n'importe quel objet. Cependant, il est très lent et exigeant en ressources, ce qui le rend inadapté aux applications temps réel ou à une utilisation sur des machines personnelles.
 
-J'ai été initialement attiré par les capacités de SAM 2, mais j'ai rapidement déchanté: même les versions les plus légères du modèle étaient difficiles à charger sur mon Mac M1, et la version "large" n'avait toujours pas fini de charger après 20 minutes d'attente. Cette contrainte matérielle, que je m'étais imposée pour ce projet (utiliser uniquement mon Mac personnel), m'a poussé vers une alternative.
+J'ai été initialement attiré par les capacités de SAM 2, mais j'ai rapidement déchanté: même les versions les plus légères du modèle étaient difficiles à charger sur la puce M1 de mon Mac, et la version "large" n'avait toujours pas fini de charger après 20 minutes d'attente. Cette contrainte matérielle, que je m'étais imposée pour ce projet (utiliser uniquement mon Mac personnel), m'a poussé vers une alternative.
 ### YOLOv8-seg
-**Avantages:**
+Ce modèle présente plusieurs avantages:
 - Rapide et efficace
 - Excellente détection des véhicules et autres objets communs
 - Compatible avec mes contraintes matérielles
@@ -171,7 +167,7 @@ J'ai été initialement attiré par les capacités de SAM 2, mais j'ai rapidemen
 J'ai donc opté pour YOLOv8-seg, qui s'est avéré rapide et globalement efficace pour la détection et la segmentation des véhicules:
 
 <figure>
-  <img src="./imgs/2/yolo_seg.png" alt="YOLOv8-seg" style="width: 90%;" />
+  <img src="../imgs/2/yolo_seg.png" alt="YOLOv8-seg" style="width: 90%;" />
   <figcaption>Exemple de détection et de segmentation de véhicules avec YOLOv8-seg</figcaption>
 </figure>
 
@@ -184,7 +180,7 @@ Un problème persistait cependant: YOLOv8 ne détecte pas le capot de la voiture
 L'application de cette segmentation combinée (YOLOv8 pour les objets mobiles + segmentation manuelle du capot) a permis de réduire le score d'erreur à **812.57%**, représentant une amélioration d'environ 60% par rapport à la méthode basée uniquement sur le flux optique.
 
 <figure>
-  <img src="./imgs/2/final_viz.gif" alt="Exemple de prédiction avec la méthode de l'arc 2" style="width: 90%;" />
+  <img src="../imgs/2/final_viz.gif" alt="Exemple de prédiction avec la méthode de l'arc 2" style="width: 90%;" />
   <figcaption>Exemple de prédiction avec la méthode de l'arc 2</figcaption>
 </figure>
 
@@ -194,7 +190,7 @@ Bien que ce score reste très élevé et loin d'être satisfaisant, cette améli
 Dans cette nouvelle approche, je m'attaque directement au problème fondamental : comment trouver le point de convergence des vecteurs de flux optique (l'épipole) de manière plus précise ?
 Lorsque le véhicule dans lequel la caméra est embarqué se déplace en ligne droite, tous les objets stationnaires semblent "s'écouler" depuis un point unique - l'épipole. Ce phénomène crée un champ de vecteurs avec une propriété géométrique essentielle : les vecteurs de flux optique des objets stationnaires pointent dans des directions qui s'éloignent de l'épipole.
 
-Pour exploiter cette propriété, je calcule un score de colinéarité pour chaque pixel, puis j'agrège ces scores en un score global:
+Puisque la position de l'épipole est inconnue, l'approche consiste à tester plusieurs "points candidats". Pour chaque candidat, on calcule un score de colinéarité global pour évaluer sa plausibilité.
 Pour chaque pixel p avec un vecteur de flux optique $\vec{v}(p)$, et un point candidat e, je calcule :
 - Le vecteur normalisé du flux optique :  
 $$\hat{v}(p) = \frac{\vec{v}(p)}{\|\vec{v}(p)\|}$$
@@ -205,7 +201,7 @@ $$s(p) = \hat{v}(p) \cdot \hat{d}(p)$$
 Ce produit scalaire vaut 1 si les vecteurs sont parfaitement alignés, 0 s'ils sont perpendiculaires, et -1 s'ils pointent dans des directions opposées.
 
 <figure>
-  <img src="./imgs/3/collinearity_concept.gif" alt="Score de colinéarité" style="width: 90%;" />
+  <img src="../imgs/3/collinearity_concept.gif" alt="Score de colinéarité" style="width: 90%;" />
   <figcaption>Exemple de calcul du score de colinéarité pour un pixel</figcaption>
 </figure>
 
@@ -215,7 +211,7 @@ $$S(e) = \frac{1}{|P|} \sum_{p \in P} s(p)$$
 Où P est l'ensemble des pixels dans l'image.
 
 <figure>
-  <img src="./imgs/3/global_collinearity_score.gif" alt="Score de colinéarité global" style="width: 90%;" />
+  <img src="../imgs/3/global_collinearity_score.gif" alt="Score de colinéarité global" style="width: 90%;" />
   <figcaption>Exemple de calcul du score de colinéarité global pour un point candidat</figcaption>
 </figure>
 
@@ -229,18 +225,18 @@ Lors de mes observations initiales des champs de vecteurs de flux optique, j'ai 
 
 Pour améliorer la robustesse de mon estimation, j'ai donc décidé d'appliquer un filtrage simple : éliminer tous les vecteurs dont la norme est inférieure à $10^{-2}$. Ce seuil a été choisi un peu arbitrairement d'après mes observations. J'ai décidé de regarder ça de plus près dans la prochaine itération du projet.
 ### Méthode d'optimisation
-En visualisant ce score pour différentes positions candidates, j'observe que la fonction présente généralement une forme concave après filtrage approprié:
+
+En visualisant le **score de colinéarité global** (défini précédemment) pour différentes positions candidates, j'observe que la fonction-objectif à minimiser présente une forme généralement **convexe**, ce qui la rend idéale pour l'optimisation.
 
 <figure>
-  <img src="./imgs/3/convex_function.png" alt="Score de colinéarité global" style="width: 90%;" />
-  <figcaption>Visualisation du score de colinéarité global pour des positions candidates couvrant toute l'image</figcaption>
+  <img src="../imgs/3/convex_function.png" alt="Score de colinéarité global" style="width: 90%;" />
+  <figcaption>Visualisation du score de colinéarité global pour des positions candidates couvrant toute l'image. La forme de "cuvette" est caractéristique d'une fonction convexe.</figcaption>
 </figure>
 
-Cette observation m'a conduit à traiter ce problème comme une optimisation par descente de gradient - une approche naturelle pour trouver le minimum d'une fonction concave.
+Cette propriété m'a conforté dans le choix d'une **méthode d'optimisation basée sur le gradient** pour trouver le minimum de manière efficace.
 
-Pour implémenter cette descente de gradient, j'ai opté pour l'algorithme L-BFGS-B (Limited-memory BFGS with Bounds) qui approxime la méthode de Newton et présente un compromis intéressant:
-- Il converge généralement en moins d'itérations qu'une descente de gradient classique pour ce type de fonctions concaves
-- Chaque itération demande plus de calculs, mais le nombre réduit d'itérations compense généralement ce coût
+Bien qu'une descente de gradient classique soit une option, j'ai choisi une approche plus sophistiquée : l'algorithme **L-BFGS-B** (Limited-memory BFGS with Bounds). Il s'agit d'une méthode **quasi-Newton** qui offre un excellent compromis performance/coût :
+Il converge en beaucoup moins d'itérations qu'une descente de gradient simple pour ce type de problème, bien que chaque itération soit plus complexe
 ## Paramètres du flux optique
 Les vecteurs de flux optique constituent les données brutes utilisées par toutes les méthodes d'optimisation subséquentes. Il m'a donc paru essentiel d'optimiser leur qualité pour améliorer l'ensemble du processus d'estimation de l'épipole.
 
@@ -255,7 +251,7 @@ Cette amélioration significative valide l'approche combinée: nouveau critère 
 
 
 <figure markdown>
-  <img src="./imgs/3/final_viz.gif" alt="GIF de prédictions" style="width: 90%;" />
+  <img src="../imgs/3/final_viz.gif" alt="GIF de prédictions" style="width: 90%;" />
   <figcaption>Exemple de prédiction avec la méthode de l'arc 3</figcaption>
 </figure>
 
@@ -273,6 +269,7 @@ J'ai identifié trois critères prometteurs pour améliorer la sélection des ve
 Pour cette première exploration, j'ai retenu les deux premiers critères - ils me semblaient plus prometteurs et deux paramètres constituent déjà un bon point de départ.
 ### Stratégies de filtrage
 J'ai ensuite considéré deux approches principales :
+
 **Filtrage adaptatif vs général** : Utiliser du machine learning pour trouver des paramètres spécifiques à chaque frame, ou trouver des paramètres qui fonctionnent bien en moyenne sur toutes les frames. Avec peu de données d'entraînement disponibles, j'ai opté pour la simplicité : des paramètres généraux.
 
 **Filtrage dur vs pondération** : Le filtrage dur élimine complètement certains vecteurs selon des critères binaires (ex: tous ceux de norme > 0.01), tandis que la pondération leur attribue des poids variables (ex: coefficient linéaire par rapport à leur score de colinéarité avec le centre). J'ai choisi de partir sur le filtrage dur en premier - plus simple à implémenter et à interpréter.
@@ -292,7 +289,7 @@ Il faut donc que je trouve un moyen d'accélérer drastiquement l'évaluation de
 Pour trouver l'épipole sur une frame, ma méthode actuelle suit une pipeline séquentielle en trois modules :
 
 <figure>
-  <img src="./imgs/4/pipeline.png" alt="Pipeline" style="width: 90%;" />
+  <img src="../imgs/4/pipeline.png" alt="Pipeline" style="width: 90%;" />
   <figcaption>Pipeline de prédiction de l'épipole</figcaption>
 </figure>
 
@@ -305,7 +302,7 @@ Pour trouver l'épipole sur une frame, ma méthode actuelle suit une pipeline s�
 Dans cette section, nous suivrons mon cheminement visant à accélérer chacun de ces trois modules.
 #### Module 1 : génération des champs de vecteurs de flux optique
 **Précalcul des champs de vecteurs**
-L'optimisation la plus évidente consiste à précalculer tous les champs de vecteurs de flux optique plutôt que de les recalculer à chaque test de paramètres de filtrage. 
+L'optimisation la plus évidente consiste à précalculer tous les champs de vecteurs de flux optique plutôt que de les recalculer à chaque évaluation de paramètres de filtrage. 
 
 **Défis de stockage**
 Cette stratégie m'a rapidement confronté à un problème pratique : les 5 fichiers générés pesaient chacun 10 Go (encodage float32 par défaut), saturant complètement la mémoire de mon Mac.
@@ -324,6 +321,7 @@ Cette optimisation élimine complètement le temps de calcul du module 1 lors de
 **Contraintes matérielles et choix technologiques** Travaillant sur un Mac M1 Pro, j'ai été confronté à une limitation connue : JAX (une bibliothèque de calcul numérique accéléré) n'exploite pas efficacement le GPU de cette architecture. Deux options s'offraient à moi :
 - Chercher un serveur externe pour mes calculs
 - Trouver une bibliothèque mieux adaptée à ma puce
+
 Par curiosité et pour tester les limites des capacités de mon hardware, j'ai opté pour la seconde option. Mes recherches m'ont mené à **MLX**, la bibliothèque développée par Apple spécifiquement pour leurs puces. Les premiers tests ont été convaincants : une accélération notable par rapport aux calculs séquentiels.
 
 **Stratégie de parallélisation pour le filtrage** J'ai implémenté une parallélisation à deux niveaux spécifiquement pour optimiser le filtrage des vecteurs :
@@ -359,7 +357,7 @@ En analysant ce phénomène surprenant, j'ai compris que converger jusqu'au fond
 Cette stratégie d'arrêt prématuré s'est donc révélée doublement bénéfique : accélération du calcul ET amélioration de la précision.
 
 <figure>
-  <img src="./imgs/4/optimizer_comp.png" alt="GIF de prédictions" style="width: 90%;" />
+  <img src="../imgs/4/optimizer_comp.png" alt="GIF de prédictions" style="width: 90%;" />
   <figcaption>Trajectoires de différents optimisateurs pour une frame</figcaption>
 </figure>
 
@@ -396,14 +394,14 @@ L'exploration de l'espace des paramètres a permis d'identifier les valeurs suiv
 - **Seuil de norme** : 13
 
 <figure>
-  <img src="./imgs/4/effet_filtrage.png" alt="Comparaison des filtres" style="width: 90%;" />
+  <img src="../imgs/4/effet_filtrage.png" alt="Comparaison des filtres" style="width: 90%;" />
   <figcaption>Comparaison de champs de vecteurs de flux optique pour différents paramètres de filtrage</figcaption>
 </figure>
 
 Ces paramètres ont produit un **score de 54.32%**, représentant une amélioration significative de 60% par rapport à l'itération précédente. Cette performance marque l'entrée dans une fourchette de résultats acceptables, tout en conservant un potentiel d'amélioration substantiel pour les optimisations futures.
 
 <figure markdown>
-  <img src="./imgs/4/final_viz.gif" alt="GIF de prédictions" style="width: 90%;" />
+  <img src="../imgs/4/final_viz.gif" alt="GIF de prédictions" style="width: 90%;" />
   <figcaption>Exemple de prédiction avec la méthode de l'arc 4</figcaption>
 </figure>
 
@@ -424,7 +422,7 @@ où :
 - α : raideur/pente de la transition
 
 <figure>
-  <img src="./imgs/5/sigmoid.png" alt="Fonction sigmoïde" style="width: 90%;" />
+  <img src="../imgs/5/sigmoid.png" alt="Fonction sigmoïde" style="width: 90%;" />
   <figcaption>Fonction sigmoïde</figcaption>
 </figure>
 
@@ -433,7 +431,7 @@ D'une part, elle englobe naturellement les cas extrêmes : un paramètre $k$ tr�
 D'autre part, elle se limite à seulement deux paramètres à optimiser, préservant ainsi la tractabilité de l'espace de recherche.
 
 <figure>
-  <img src="./imgs/5/sigmoids.gif" alt="Fonctions sigmoïde" style="width: 90%;" />
+  <img src="../imgs/5/sigmoids.gif" alt="Fonctions sigmoïde" style="width: 90%;" />
   <figcaption>Fonction sigmoïde pour différents paramètres de seuil et de raideur</figcaption>
 </figure>
 
@@ -501,7 +499,7 @@ Cette approche visait à découvrir des patterns géométriques récurrents auto
 **Heatmaps absolues par vidéo (Approche 1) :**
 Sur l'image suivante on peut voir la moyenne des scores de collinéarité par vidéo en coordonnées absolues :
 <figure>
-  <img src="./imgs/5/abs_heatm_per_video.png" alt="Heatmap absolue par vidéo" style="width: 90%;" />
+  <img src="../imgs/5/abs_heatm_per_video.png" alt="Heatmap absolue par vidéo" style="width: 90%;" />
   <figcaption>Heatmap absolue par vidéo</figcaption>
 </figure>
 Observations :
@@ -512,7 +510,7 @@ Observations :
 **Heatmap absolue globale (Approche 1) :**
 Sur l'image suivante, on peut voir la moyenne des scores de collinéarité par pixel absolu, sur l'ensemble des vidéos :
 <figure>
-  <img src="./imgs/5/abs_heatm_global.png" alt="Heatmap absolue globale" style="width: 90%;" />
+  <img src="../imgs/5/abs_heatm_global.png" alt="Heatmap absolue globale" style="width: 90%;" />
   <figcaption>Heatmap absolue globale</figcaption>
 </figure>
 Un motif clair similaire à celui apparaissant sur les images 0, 1 et 4 apparaît sur l'image globale.
@@ -521,7 +519,7 @@ Un motif clair similaire à celui apparaissant sur les images 0, 1 et 4 apparaî
 J'ai également implémenté et testé cette approche pour voir si elle révélerait des patterns plus informatifs que l'approche absolue:
 
 <figure>
-  <img src="./imgs/5/rel_heatm_global.png" alt="Heatmap relative globale" style="width: 90%;" />
+  <img src="../imgs/5/rel_heatm_global.png" alt="Heatmap relative globale" style="width: 90%;" />
   <figcaption>Heatmap relative globale</figcaption>
 </figure>
 
@@ -638,7 +636,7 @@ Les paramètres optimaux identifiés sont :
 Cela donne des filtres sigmoïdaux qui ressemblent à ceci :
 
 <figure>
-  <img src="./imgs/5/sigmoids_opti.png" alt="Fonctions sigmoïde" style="width: 90%;" />
+  <img src="../imgs/5/sigmoids_opti.png" alt="Fonctions sigmoïde" style="width: 90%;" />
   <figcaption>Fonctions sigmoïde pour les paramètres optimaux des filtres de norme et de colinéarité</figcaption>
 </figure>
 
@@ -671,11 +669,11 @@ On observe que lisser les prédictions avec la moyenne exponentielle bi-directio
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div style="width: 48%; text-align: center;">
       <span style="font-weight: bold;">Point de référence : Centre de l'image</span><br>
-      <img src="./imgs/5/final_viz_center.gif" alt="GIF de prédictions - Centre" style="width: 100%;">
+      <img src="../imgs/5/final_viz_center.gif" alt="GIF de prédictions - Centre" style="width: 100%;">
     </div>
     <div style="width: 48%; text-align: center;">
       <span style="font-weight: bold;">Point de référence : Moyenne de l'expérience précédente</span><br>
-      <img src="./imgs/5/final_viz_mean.gif" alt="GIF de prédictions - Moyenne" style="width: 100%;">
+      <img src="../imgs/5/final_viz_mean.gif" alt="GIF de prédictions - Moyenne" style="width: 100%;">
     </div>
   </div>
   <figcaption style="text-align: center; margin-bottom: 10px;">

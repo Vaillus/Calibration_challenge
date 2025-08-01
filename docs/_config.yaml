@@ -1,5 +1,19 @@
-title: "Titre de ton blog/article"
-description: "Description de ton contenu"
+languages: ["fr", "en"]
+default_lang: "fr"
+
+t:
+  fr:
+    title: "Défi de Calibration - Blog de Recherche"
+    description: "Documentation du projet de calibration de caméra"
+    lang_name: "Français"
+    other_lang: "en"
+    other_lang_name: "English"
+  en:
+    title: "Calibration Challenge - Research Blog"
+    description: "Camera calibration project documentation"
+    lang_name: "English"
+    other_lang: "fr"
+    other_lang_name: "Français"
 baseurl: "/Calibration_challenge"  # ⬅️ Exact nom du repo
 url: "https://Vaillus.github.io" 
 

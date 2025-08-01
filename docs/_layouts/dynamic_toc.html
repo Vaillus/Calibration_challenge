@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ page.lang | default: site.default_lang | default: 'fr' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ page.title }} - {{ site.title }}</title>
+    <title>{{ page.title }} - {{ site.t[page.lang].title | default: site.title }}</title>
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -222,6 +222,23 @@
 </head>
 
 <body>
+    <!-- Sélecteur de langue -->
+    <nav class="navbar navbar-light bg-light border-bottom">
+        <div class="container-fluid">
+            <div class="d-flex align-items-center ms-auto">
+                {% assign current_lang = page.lang | default: site.default_lang %}
+                {% assign other_lang = site.t[current_lang].other_lang %}
+                {% assign other_lang_name = site.t[current_lang].other_lang_name %}
+                
+                <span class="me-2">{{ site.t[current_lang].lang_name }}</span>
+                <span class="me-2">|</span>
+                <a href="{{ site.baseurl }}/{{ other_lang }}/" class="text-decoration-none">
+                    {{ other_lang_name }}
+                </a>
+            </div>
+        </div>
+    </nav>
+    
     <div class="container-fluid">
         <div class="row justify-content-center">
             <div class="col-12" style="max-width: 1200px;">
@@ -229,7 +246,7 @@
                     <!-- Sidebar TOC -->
                     <div class="col-md-4 col-lg-3">
                         <nav class="toc-sidebar">
-                            <h3>Sommaire</h3>
+                            <h3>{% if current_lang == 'fr' %}Sommaire{% else %}Table of Contents{% endif %}</h3>
                             <ul class="toc-list" id="toc-list">
                                 <!-- Le TOC sera généré ici -->
                             </ul>

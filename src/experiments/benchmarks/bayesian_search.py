@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from src.utilities.filter_config_evaluator import FilterConfigEvaluator
 from src.utilities.worst_errors import select_frames_from_all_deciles
 from src.utilities.paths import get_intermediate_dir
+from src.temp.test_special_batch import sample_frames_from_segments
 
 
 @dataclass
@@ -24,7 +25,7 @@ class SearchState:
     results: List[Dict[str, Any]]
     best_score: float
     best_config: Optional[Dict[str, Any]]
-    best_use_mean_points: bool
+    best_use_mean_points: bool # used for printing whether the best solution uses previous mean points for colinearity computation.
     last_improvement_call: int
     baseline_mean: float
     n_calls: int
@@ -41,6 +42,7 @@ class BayesianSearch(FilterConfigEvaluator):
         self.results_dir.mkdir(exist_ok=True)
         self.history_file = self.results_dir / "bayesian_search_history.json"
         self.search_state: Optional[SearchState] = None
+        self.eval_evaluator: Optional[FilterConfigEvaluator] = None
 
     def search(self, 
                param_ranges: dict,
@@ -50,6 +52,7 @@ class BayesianSearch(FilterConfigEvaluator):
                initial_configs: list = None,
                search_heatmap: bool = False,
                search_mean_points: bool = True,
+               default_use_mean_points: bool = False,
                use_previous_results: bool = True,
                max_previous_points: int = 100) -> dict:
         """
@@ -64,6 +67,7 @@ class BayesianSearch(FilterConfigEvaluator):
             initial_configs: Liste de configurations de départ intelligentes (default: None)
             search_heatmap: Inclure les paramètres heatmap dans la recherche (default: False)
             search_mean_points: Inclure le paramètre points moyens dans la recherche (default: True)
+            default_use_mean_points: Valeur par défaut si search_mean_points=False (default: False = centre image)
             use_previous_results: Utiliser l'historique comme prior (default: True)
             max_previous_points: Nombre max de points précédents à charger (default: 100)
             
@@ -87,13 +91,16 @@ class BayesianSearch(FilterConfigEvaluator):
             results=[],
             best_score=float('inf'),
             best_config=None,
-            best_use_mean_points=False,
+            best_use_mean_points=default_use_mean_points,  # Valeur par défaut
             last_improvement_call=0,
             baseline_mean=baseline_mean,
             n_calls=n_calls,
             search_heatmap=search_heatmap,
             search_mean_points=search_mean_points
         )
+        
+        # Stocker la valeur par défaut pour les fonctions de conversion
+        self.default_use_mean_points = default_use_mean_points
         
         # 3. Construire l'espace de recherche
         dimensions = self._build_search_space(
@@ -170,17 +177,24 @@ class BayesianSearch(FilterConfigEvaluator):
         
         for param_name in param_names:
             if param_name == 'use_mean_points':
-                # Paramètre booléen spécial - toujours discret
+                # Paramètre booléen spécial - automatiquement ajouté si search_mean_points=True
+                dimensions.append(Categorical([False, True], name=param_name))
+            elif param_name == 'heatmap_weight':
+                # Paramètre heatmap - automatiquement ajouté si search_heatmap=True
+                # Vérifier quand même param_ranges pour les bounds
                 if param_name in param_ranges:
-                    # Si présent dans param_ranges, on veut l'explorer
-                    dimensions.append(Categorical([False, True], name=param_name))
-                elif search_mean_points:
-                    # Par défaut si search_mean_points=True
-                    dimensions.append(Categorical([False, True], name=param_name))
+                    min_val, max_val = param_ranges[param_name]
+                    dimensions.append(Real(min_val, max_val, name=param_name))
+                else:
+                    # Valeur par défaut si non spécifié
+                    dimensions.append(Real(0.0, 1.0, name=param_name))
+                    print(f"⚠️  {param_name} pas dans param_ranges, utilisation range par défaut [0.0, 1.0]")
             elif param_name in param_ranges:
-                # Paramètres continus normaux
+                # Paramètres continus normaux (norm_k, norm_x0, colinearity_k, colinearity_x0)
                 min_val, max_val = param_ranges[param_name]
                 dimensions.append(Real(min_val, max_val, name=param_name))
+            else:
+                raise ValueError(f"Paramètre '{param_name}' requis mais absent de param_ranges")
         
         return dimensions
 
@@ -258,26 +272,28 @@ class BayesianSearch(FilterConfigEvaluator):
         # Évaluer (silencieux)
         original_verbose = self.verbose
         self.verbose = False
-        mean_distance = self.evaluate_filter_config(config, use_mean_points=use_mean_points)
+        score = self.evaluate_filter_config(config, use_mean_points=use_mean_points)
+        eval_score = self.eval_evaluator.evaluate_filter_config(config, use_mean_points=use_mean_points)
         self.verbose = original_verbose
         
         # Sauvegarder dans l'historique
-        self.save_to_history(params, mean_distance)
+        self.save_to_history(params, score, eval_score)
         
         # Stocker résultat
         result = {
             'config': config.copy(),
             'use_mean_points': use_mean_points,
-            'mean_distance': mean_distance,
-            'improvement': state.baseline_mean - mean_distance,
+            'mean_distance': score,
+            'improvement': state.baseline_mean - score,
             'call_id': len(state.results) + 1,
-            'params': list(params)  # Conversion pour JSON
+            'params': list(params),  # Conversion pour JSON,
+            'eval_score': eval_score
         }
         state.results.append(result)
         
         # Mettre à jour meilleur
-        if mean_distance < state.best_score:
-            state.best_score = mean_distance
+        if score < state.best_score:
+            state.best_score = score
             state.best_config = config.copy()
             state.best_use_mean_points = use_mean_points
             state.last_improvement_call = len(state.results)
@@ -286,11 +302,11 @@ class BayesianSearch(FilterConfigEvaluator):
         self._update_live_display(
             len(state.results), state.n_calls, state.best_score, state.baseline_mean,
             state.last_improvement_call, state.best_config, state.best_use_mean_points, 
-            last_score=mean_distance
+            last_score=score
         )
         
         # Retourner score à minimiser (fonction objective pour gp_minimize)
-        return mean_distance
+        return score
 
     def _run_optimization(self, dimensions, x0, y0, n_calls, n_initial_points, acq_func):
         """Lance l'optimisation bayésienne avec gestion d'interruption"""
@@ -348,7 +364,8 @@ class BayesianSearch(FilterConfigEvaluator):
         }
         
         idx = 4
-        use_mean_points = False
+        # Utiliser la valeur par défaut configurée au lieu de False codé en dur
+        use_mean_points = getattr(self, 'default_use_mean_points', False)
         
         if search_heatmap and len(params) > idx:
             config['heatmap']['is_used'] = True
@@ -378,7 +395,7 @@ class BayesianSearch(FilterConfigEvaluator):
         
         return params
     
-    def save_to_history(self, params, score):
+    def save_to_history(self, params, score, eval_score):
         """Ajoute un point au fichier d'historique"""
         # Charger l'historique existant
         history = {"evaluations": []}
@@ -398,6 +415,7 @@ class BayesianSearch(FilterConfigEvaluator):
         history["evaluations"].append({
             "params": json_params,
             "score": float(score),
+            "eval_score": float(eval_score),
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         })
         
@@ -508,23 +526,53 @@ if __name__ == "__main__":
     print("🧠 LANCEMENT RECHERCHE BAYÉSIENNE AVANCÉE")
     print("=" * 50)
     
-    # Sélectionner frames aléatoires par décile
-    frames_by_decile = select_frames_from_all_deciles(run_name="8", n_frames_per_decile=10, seed=43)
+    # # Sélectionner frames aléatoires par décile
+    # frames_by_decile = select_frames_from_all_deciles(run_name="5_4", n_frames_per_decile=10, seed=43)
 
+    # making the training set
+    with open(get_intermediate_dir() / 'sets_info/training_set.json', 'r') as f:
+        train_set_info = json.load(f)
+
+    frames_train_set = sample_frames_from_segments(run_name="5_7_smoothed", n_frames_per_decile=3, segments_info=train_set_info, seed=42)
+
+    with open(get_intermediate_dir() / 'sets_info/eval_set.json', 'r') as f:
+        eval_set_info = json.load(f)
+    frames_eval_set = sample_frames_from_segments(
+        run_name="5_7_smoothed", 
+        n_frames_per_decile=3, 
+        segments_info=eval_set_info, 
+        seed=42
+    )
+    eval_evaluator = FilterConfigEvaluator(
+        data_source=frames_eval_set,
+        baseline_pred_gen="5_6", 
+        means_gen="5_6", 
+        verbose=False  # Silencieux pour ne pas polluer les logs
+    )
+    eval_evaluator.load_data()
 
     # Initialisation
-    searcher = BayesianSearch(data_source=frames_by_decile, baseline_pred_gen="5_4", means_gen="5_4", verbose=True)
+    searcher = BayesianSearch(
+        data_source=frames_train_set, baseline_pred_gen="5_6", 
+        means_gen="5_6", 
+        verbose=True,
+        # eval_evaluator=eval_evaluator
+    )
     searcher.load_data()
+    searcher.eval_evaluator = eval_evaluator
+
+    
     
     eps = 1e-6
     # Définition des ranges de recherche
+    kmax = 300
     param_ranges = {
-        'norm_k': (-10.0, 150.0),  # Élargi pour inclure 0.21
-        'norm_x0': (-10.0, 151.0),  # Élargi pour inclure 39.60
-        'colinearity_k': (150.0-eps, 150.0+eps),
-        'colinearity_x0': (0.96-eps, 0.96+eps),  # Élargi pour inclure 1.10
+        'norm_k': (-kmax, kmax),  # Élargi pour inclure 0.21
+        'norm_x0': (-50.0, 150.0),  # Élargi pour inclure 39.60
+        'colinearity_k': (-kmax, kmax),
+        'colinearity_x0': (0.0, 3.0),  # Élargi pour inclure 1.10
         'heatmap_weight': (0.0, 1.0),
-        'use_mean_points': True  # Explore True ET False
+        # Note: use_mean_points supprimé - contrôlé par search_mean_points maintenant
     }
     
     # Points de départ intelligents basés sur les résultats précédents
@@ -543,11 +591,11 @@ if __name__ == "__main__":
     #             'weight': 0.79
     #         }
     #     }, True),
-    #     ({
-    #          'norm': {'is_used': True, 'k': 150.0, 'x0': 13},
-    #          'colinearity': {'is_used': True, 'k': 150.0, 'x0': 0.96},
-    #          'heatmap': {'is_used': False}
-    #      }, True),  # use_mean_points=False
+        ({
+             'norm': {'is_used': True, 'k': 180.0, 'x0': 8},
+             'colinearity': {'is_used': True, 'k': 152.0, 'x0': 1.245},
+             'heatmap': {'is_used': False}
+         }, False)  # use_mean_points=False
     #     # Configuration "soft norm + hard colinearity" (meilleure de la recherche précédente)
     #     ({
     #         'norm': {'is_used': True, 'k': 0.21, 'x0': 39.60},  # Vraies valeurs trouvées
@@ -570,17 +618,24 @@ if __name__ == "__main__":
     print("🔍 Exploration des paramètres heatmap ET mean points")
     print("📚 Réutilisation automatique de l'historique précédent")
     
+    # LOGIQUE MEAN_POINTS CLARIFIÉE :
+    # - search_mean_points=True  → Explore automatiquement True ET False
+    # - search_mean_points=False → Utilise toujours default_use_mean_points
+    #   * default_use_mean_points=False → Toujours centre image
+    #   * default_use_mean_points=True  → Toujours mean points
+    
     # Lancement de la recherche avec historique
     results = searcher.search(
         param_ranges=param_ranges,
         n_calls=1000,  # Moins d'évaluations car on réutilise l'historique
-        n_initial_points=250,  # Moins de points aléatoires
-        acq_func='gp_hedge', 
+        n_initial_points=50,  # Nb de points aléatoires
+        acq_func='gp_hedge', # EI, gp_hedge, LCB
         initial_configs=smart_configs,
-        search_heatmap=True,  # Activer recherche heatmap
-        search_mean_points=True,  # Activer recherche mean points
+        search_heatmap=False,  # Activer recherche heatmap
+        search_mean_points=False,  # Activer recherche mean points (explore True ET False)
+        default_use_mean_points=False,  # Si search_mean_points=False, utiliser centre image
         use_previous_results=True,  # Utiliser l'historique
-        max_previous_points=250  # Charger jusqu'à 100 points précédents
+        max_previous_points=1000  # Charger jusqu'à 100 points précédents
     )
 
     print_results(results)

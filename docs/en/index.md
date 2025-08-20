@@ -754,3 +754,149 @@ To explore this question, I visualized two metrics across all frames:
 - In videos with variable numbers, best performances seem to coincide with frames having the most vectors
 
 However, no clear rule emerged from this analysis. Expected correlations didn't materialize in an exploitable way to improve filtering.
+
+# Arc final : Optimisation avancée et conclusions
+
+## Submitting Results
+I first visualized the output predictions from my filtering and smoothing on the five test videos. Satisfied with the results, I submitted them to Comma.ai, confident that my solution should perform below the 15% mark, my initial goal.
+However, I noted that there were several sharp turns in this dataset, while there was only one in the training data. I hoped this wouldn't impact my results too much. Visually, it seemed to work well.
+In any case, there was only one way to find out: submit my results.
+After a few days of waiting, I received my model's score: 30%. Ouch, cold shower! I wasn't expecting to see such a performance drop...
+
+"Damn those turns!" I immediately thought. Then another unpleasant idea came to mind. Such a difference between my score on training data and the score obtained on test data didn't leave my old data scientist reflexes indifferent: I had overfitted!
+
+The question had actually been floating in my mind for several arcs: was it relevant to create an evaluation set for the algorithm I was designing? Could my parameter search for filtering and smoothing be considered a form of learning?
+Given that I was looking for global parameters working for all frames in the dataset, not frame-specific parameters, I thought this should limit overfitting risks. But I apparently was wrong.
+
+<!-- Whatever the case, part of me felt we were starting to reach the limits of general parameters. But I couldn't stop there with my current method. -->
+I needed to create training and evaluation sets that would allow me to improve my score on the test set!
+
+## Dataset Design
+
+### Video Segment Selection for Dataset Construction
+After a quick look at frames where my error was highest, it was obvious there was a strong correlation between turns and high error.
+
+To analyze this phenomenon, I developed a method based on deviation from the median point:
+
+1. **Reference point calculation**: For each video, I calculated the median of coordinates (x, y) of points, separately for predictions and labels
+2. **Deviation measurement**: For each frame, I calculated the Euclidean distance between that frame's point and the corresponding median point
+
+This approach allows visualizing how points deviate from their "typical" position throughout each video. More interestingly, it allows visual detection of turns: when the point moves away from the median point (which is probably close to the straight-line trajectory), it indicates a turning moment.
+
+In the visualizations below:
+- The **blue line** represents vertical shifts: above zero = upward shift, below = downward shift
+- The **red line** represents horizontal shifts: above zero = right turn, below = left turn
+
+<figure markdown>
+  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div style="width: 48%; text-align: center;">
+      <!-- <span style="font-weight: bold;">Reference point: Image center</span><br> -->
+      <img src="../imgs/outro/pred.png" alt="Prediction GIF - Center" style="width: 100%;">
+    </div>
+    <div style="width: 48%; text-align: center;">
+      <!-- <span style="font-weight: bold;">Reference point: Previous experiment average</span><br> -->
+      <img src="../imgs/outro/label.png" alt="Prediction GIF - Average" style="width: 100%;">
+    </div>
+  </div>
+  <figcaption style="text-align: center; margin-bottom: 10px;">
+    <strong>Deviation from median point in pixels: predictions (left) and labels (right)</strong>
+  </figcaption>
+</figure>
+
+In the figure below, we can observe the Euclidean distance between prediction and label for each frame of each video.
+
+<figure markdown>
+  <img src="../imgs/outro/distances.png" alt="Error distance distribution">
+  <figcaption>Distance in pixels between prediction and label for each frame of each video</figcaption>
+</figure>
+
+It's evident from these figures that turns are the frames where error is highest. I therefore decided to create training and evaluation sets that contain turning frames.
+
+### Dataset Construction
+
+Now that I had identified the problematic passages, I needed to build strategic training and validation sets.
+
+**Selection principle**: I isolated approximately 2300 frames of interest distributed in segments of 100 to 400 frames, ensuring to include:
+- Segments with pronounced turns (high error zones)
+- Straight segments (to avoid overfitting on turns)
+- Special cases like poorly smoothed "speed bumps"
+
+**Sampling method**: For each selected segment, I applied the same decile sampling strategy as before: division into 10 deciles and sampling a fixed number of frames per decile. This approach guarantees balanced representation of each segment.
+
+**Final distribution**:
+- **Training set**: 300 frames from segments with difficult turns and problematic smoothing zones
+- **Validation set**: 100 frames including straight segments and turns not detected by labels
+
+This more targeted approach allowed me to increase dataset sizes compared to the previous 100 samples, while focusing on critical use cases.
+
+## Experiments with New Datasets
+
+### Bayesian Search for Filtering Parameters
+
+With my new training and validation sets, I relaunched a Bayesian search to optimize filtering parameters. I included my best parameters from previous arcs as starting points to guide the search. I also performed a local search around these parameters to finely explore the nearby space. Surprising result: despite exploring hundreds of combinations, no search direction significantly improved performance on training or validation sets!
+
+### Smoothing Parameter Optimization
+
+I also tested new smoothing parameters on these datasets. Identical result: the optimal parameter was the same as in my previous selection. No improvement was brought by using separate training and validation sets.
+
+### Assessment and Insights
+
+**Major conclusion**: The division into training/validation sets didn't bring significant improvement.
+
+**Key observation**: By analyzing errors more closely, I identified that:
+- Errors are massively concentrated in turns
+- My method predicts larger deviations than labels during turns
+- Smoothing reduces turn amplitude but spreads them temporally
+
+**Final hypothesis**: The real problem isn't parameter overfitting, but a fundamental weakness of my method for predicting vehicle direction in turns. Test set turns are probably more difficult to predict than training ones.
+
+# Assessment and Perspectives
+
+Analysis of results reveals that the developed method, despite successive optimizations, presents a systematic weakness in turns. This weakness doesn't stem from a parameterization or overfitting problem, but from a fundamental conceptual confusion in the initial approach.
+
+## The Focus of Expansion, My Method's Hidden Objective
+
+My approach, based on minimizing optical flow collinearity score, was actually designed to find a Focus of Expansion (FoE). This phenomenon corresponds to the unique point on the image from which all apparent scene movement seems to diverge.
+
+However, the Focus of Expansion only appears under a very strict condition: pure translational movement.
+
+## Optical Flow "Contamination" in Turns
+
+This condition explains the algorithm's failure in turns. A turn is a compound movement, combining translation with rotation. This rotation component "contaminates" the optical flow vector field:
+- Translation alone creates radial flow moving away from the FoE.
+- Rotation superimposes rotational flow that wraps vectors around a center.
+
+The combination of both breaks the simple divergence pattern. Consequently, in a turn, the Focus of Expansion as a unique convergence point no longer exists.
+
+## The Distinction with the Epipole
+
+The geometric concept that remains valid under all circumstances is the Epipole. It's the projection of one camera's center onto the other's plane. Unlike the FoE, its existence is guaranteed whether the movement contains rotation or not.
+
+## Final Diagnosis
+
+My error was therefore developing a method that estimates the Focus of Expansion while thinking I was estimating the Epipole.
+- In straight lines, both concepts coincide, explaining the method's good performance.
+- In turns, the algorithm sought a Focus of Expansion that no longer existed geometrically, inevitably leading to unstable and erroneous estimation.
+
+This limitation is therefore fundamental to the chosen approach and cannot be resolved by simple parameter refinement.
+
+## Envisioned Solution: Camera Motion Decomposition
+
+A robust approach consists of separating translation and rotation components of camera movement. This method relies on the following steps:
+
+- Interest point detection on an image
+- Tracking these points in the next image
+- Fundamental matrix calculation from correspondences
+- Essential matrix derivation from camera parameters
+- Pure translation movement extraction, isolated from rotation
+
+This approach should be robust to turns, and most necessary components are already available in OpenCV.
+
+## Lesson Learned
+
+My biggest strategic error was keeping smoothing for the end. I saw it as an "easy win," the cherry on top, and therefore underestimated its impact. This was a double error.
+
+- I underestimated its gain. Smoothing wasn't a small bonus, but a major improvement. Being quick to implement, I should have started with it to obtain solid results very early.
+- I misunderstood its role. More importantly, smoothing wasn't just a simple optimization; it was my best diagnostic tool. By removing "noise" from my predictions, it would have immediately highlighted my method's fundamental weakness in turns, saving me from spending days perfecting a limited approach.
+
+The lesson is clear: always implement high-impact, low-effort solutions first. Not only for performance, but especially because they clarify the real problem to solve and help determine if more complex efforts are justified.

@@ -6,7 +6,10 @@ lang: fr
 ---
 
 # Introduction
-Bienvenue sur mon blog ! J'ai récemment entrepris de résoudre le challenge de calibration de caméra de Comma.ai, un problème de vision par ordinateur passionnant dans le monde de la conduite semi-autonome. Mon approche m'a finalement permis de me hisser à la Xème place du classement, et j'ai eu envie de partager cette expérience. Cet article retrace donc mon parcours, en expliquant pas à pas comment j'ai fait pour résoudre ce défi technique.
+Bienvenue sur mon blog ! J'ai récemment entrepris de résoudre le challenge de calibration de caméra de Comma.ai, un problème de vision par ordinateur passionnant dans le monde de la conduite semi-autonome
+<!-- Mon approche m'a finalement permis de me hisser à la Xème place du classement -->
+, et j'ai eu envie de partager cette expérience. 
+Cet article retrace donc mon parcours, en expliquant pas à pas ma tentative pour résoudre ce défi technique.
 ## Contexte
 Comma.ai est une entreprise qui cherche à démocratiser la conduite autonome. Là où Tesla vend des voitures complètes, comma.ai développe Openpilot : un système open-source qui transforme votre voiture existante en véhicule semi-autonome.
 
@@ -717,4 +720,153 @@ Pour explorer cette question, j'ai visualisé deux métriques à travers toutes 
 - Dans les vidéos à nombre variable, les meilleures performances semblent coïncider avec les frames ayant le plus de vecteurs
 
 Cependant, aucune règle claire n'a émergé de cette analyse. Les corrélations attendues ne se sont pas matérialisées de manière exploitable pour améliorer le filtrage.
+
+# Arc final : Optimisation avancée et conclusions
+
+## Envoi des résultats
+J'ai d'abord visualisé les prédictions en sortie de mon filtrage et lissage sur les cinq vidéos de test. Satisfait du résultat, je les ai envoyé à Comma.ai, confiant dans le fait que ma solution devrait avoir des performances sous la barre des 15%, mon objectif initial.
+Je notais cependant qu'il y a plusieurs virages serrés dans ce jeu de données, alors qu'il n'y en avait qu'un dans les données d'entraînement. J'espérais que ça n'impacterait pas trop mes résultats. De visu, ça semblait bien fonctionner.
+De toute manière, il n'y avait qu'un moyen de le savoir : envoyer mes résultats.
+Après quelques jours d'attente, j'ai reçu le score de mon modèle : 30%. Aïe, douche froide ! Je ne m'attendais pas à observer une telle de perte en performances ...
+
+"Saletés de virages !" avais-je immédiatement pensé. Et puis ensuite, une autre idée désagréable est remontée dans mon esprit. Une telle différence entre mon score sur les données d'entraînement et le score obtenu sur les données de test, ça ne laissait pas mes vieux réflexes de data scientist indifférents : j'avais overfitté !
+
+La question flottait en fait dans mon esprit depuis quelques arcs : était-il pertinent de constituer un jeu d'évaluation pour l'algorithme que je conçevais ? pouvait-on considérer que ma recherche de paramètres pour mon filtrage et mon lissage était une forme d'apprentissage ?
+étant donné le fait que je cherchais des paramètres globaux fonctionnant pour l'ensemble des frames du jeu de données, et pas des paramètres spécifiques à chaque frames, je m'étais dit que ça devrait limiter les risques de surapprentissage. Mais je supposais alors que j'avais eu tort.
+
+<!-- Quoi qu'il en soit, une partie de moi sentait qu'on commençait à arriver aux limites des paramètres généraux. Mais je ne pouvais pas en rester là avec ma méthode actuelle. -->
+il me fallait constituer un jeu d'entrainement et un jeu d'évaluation qui me permettent d'améliorer mon score sur le jeu de test !
+
+## Conception des jeux de données
+
+### Sélection des segments de vidéos pour la construction des jeux de données
+Après un rapide coup d'œil aux frames où mon erreur était la plus élevée, il était évident qu'il y avait une forte corrélation entre les virages et une erreur élevée.
+
+Pour analyser ce phénomène, j'ai développé une méthode basée sur la déviation par rapport au point médian :
+
+1. **Calcul du point de référence** : Pour chaque vidéo, j'ai calculé la médiane des coordonnées (x, y) des points, séparément pour les prédictions et les labels
+2. **Mesure de la déviation** : Pour chaque frame, j'ai calculé la distance euclidienne entre le point de cette frame et le point médian correspondant
+
+Cette approche permet de visualiser comment les points s'écartent de leur position "typique" au cours de chaque vidéo. Plus intéressant encore, elle permet de détecter visuellement les virages : quand le point s'éloigne du point médian (qui est probablement proche de la trajectoire en ligne droite), cela indique un moment de virage.
+
+Dans les visualisations ci-dessous :
+- La **ligne bleue** représente les décalages verticaux : au-dessus de zéro = décalage vers le haut, en dessous = décalage vers le bas
+- La **ligne rouge** représente les décalages horizontaux : au-dessus de zéro = virage à droite, en dessous = virage à gauche
+
+<figure markdown>
+  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div style="width: 48%; text-align: center;">
+      <!-- <span style="font-weight: bold;">Point de référence : Centre de l'image</span><br> -->
+      <img src="../imgs/outro/pred.png" alt="GIF de prédictions - Centre" style="width: 100%;">
+    </div>
+    <div style="width: 48%; text-align: center;">
+      <!-- <span style="font-weight: bold;">Point de référence : Moyenne de l'expérience précédente</span><br> -->
+      <img src="../imgs/outro/label.png" alt="GIF de prédictions - Moyenne" style="width: 100%;">
+    </div>
+  </div>
+  <figcaption style="text-align: center; margin-bottom: 10px;">
+    <strong>Déviation du point médian en pixels : prédictions (gauche) et labels (droite)</strong>
+  </figcaption>
+</figure>
+
+Dans la figure ci-dessous, on peut observer la distance euclidienne entre la prédiction et le label pour chaque frame de chaque vidéo.
+
+<figure markdown>
+  <img src="../imgs/outro/distances.png" alt="Distribution des distances d'erreur">
+  <figcaption>Distance en pixels entre la prédiction et le label pour chaque frame de chaque vidéo</figcaption>
+</figure>
+
+Il est évident sur ces figures que les virages sont les frames où l'erreur est la plus élevée. J'ai donc décidé de constituer un jeu d'entrainement et un jeu d'évaluation qui contiennent des frames de virages.
+
+### Constitution des jeux de données
+
+Maintenant que j'avais identifié les passages problématiques, il fallait construire des jeux d'entraînement et de validation stratégiques.
+
+**Principe de sélection** : J'ai isolé environ 2300 frames d'intérêt réparties en segments de 100 à 400 frames, en veillant à inclure :
+- Des segments avec virages prononcés (zones d'erreur élevée)
+- Des segments rectilignes (pour éviter l'overfitting sur les virages)
+- Des cas particuliers comme les "dos d'âne" mal lissés
+
+**Méthode d'échantillonnage** : Pour chaque segment sélectionné, j'ai appliqué la même stratégie de sampling par déciles qu'auparavant : division en 10 déciles et échantillonnage d'un nombre fixe de frames par décile. Cette approche garantit une représentation équilibrée de chaque segment.
+
+**Répartition finale** :
+- **Jeu d'entraînement** : 300 frames provenant des segments avec virages difficiles et zones problématiques de lissage
+- **Jeu de validation** : 100 frames incluant segments rectilignes et virages non détectés par les labels
+
+Cette approche plus ciblée me permettait d'augmenter la taille des jeux de données par rapport aux 100 échantillons précédents, tout en me concentrant sur les cas d'usage critiques.
+
+## Expérimentations avec les nouveaux jeux de données
+
+### Recherche bayésienne des paramètres de filtrage
+
+Avec mes nouveaux jeux d'entraînement et de validation, j'ai relancé une recherche bayésienne pour optimiser les paramètres de filtrage. J'ai inclus mes meilleurs paramètres des arcs précédents comme points de départ pour guider la recherche. J'ai également effectué une recherche locale autour de ces paramètres pour explorer finement l'espace proche. Résultat surprenant : malgré l'exploration de centaines de combinaisons, aucune direction de recherche n'a permis d'améliorer significativement les performances sur les jeux d'entraînement ou de validation !
+
+### Optimisation des paramètres de lissage
+
+J'ai également testé de nouveaux paramètres de lissage sur ces jeux de données. Résultat identique : le paramètre optimal était le même que dans ma sélection précédente. Aucune amélioration n'a été apportée par l'utilisation d'un jeu d'entraînement et de validation séparés.
+
+### Bilan et insights
+
+**Conclusion majeure** : La division en jeux d'entraînement/validation n'a pas apporté d'amélioration significative.
+
+**Observation clé** : En analysant les erreurs de plus près, j'ai identifié que :
+- Les erreurs se concentrent massivement dans les virages
+- Ma méthode prédit des écarts plus importants que les labels lors des virages
+- Le lissage réduit l'amplitude des virages mais les étale temporellement
+
+**Hypothèse finale** : Le véritable problème n'est pas l'overfitting des paramètres, mais une faiblesse fondamentale de ma méthode pour prédire la direction du véhicule dans les virages. Les virages du jeu de test sont probablement plus difficiles à prédire que ceux d'entraînement.
+
+# Bilan et Perspectives
+
+L'analyse des résultats révèle que la méthode développée, malgré ses optimisations successives, présente une faiblesse systématique dans les virages. Cette faiblesse ne provient pas d'un problème de paramétrage ou de surapprentissage, mais d'une confusion conceptuelle fondamentale dans l'approche initiale.
+
+## Le Foyer d'Expansion, l'objectif caché de ma méthode
+
+Ma démarche, basée sur la minimisation du score de colinéarité du flux optique, était en réalité conçue pour trouver un Foyer d'Expansion (FoE). Ce phénomène correspond au point unique sur l'image d'où l'intégralité du mouvement apparent de la scène semble diverger.
+
+Cependant, le Foyer d'Expansion n'apparaît que sous une condition très stricte : un mouvement de translation pure.
+
+## La "Contamination" du Flux Optique dans les virages
+
+C'est cette condition qui explique l'échec de l'algorithme dans les virages. Un virage est un mouvement composé, alliant une translation à une rotation. Cette composante de rotation vient "contaminer" le champ de vecteurs du flux optique :
+- La translation seule crée un flux radial qui s'éloigne du FoE.
+- La rotation y superpose un flux rotationnel qui enroule les vecteurs autour d'un centre.
+
+La combinaison des deux brise le schéma de divergence simple. En conséquence, dans un virage, le Foyer d'Expansion en tant que point de convergence unique n'existe plus.
+
+## La Distinction avec l'Épipole
+
+Le concept géométrique qui reste valide en toutes circonstances est celui de l'Épipole. Il s'agit de la projection du centre d'une caméra sur le plan de l'autre. Contrairement au FoE, son existence est garantie que le mouvement contienne ou non une rotation.
+
+## Diagnostic Final
+
+Mon erreur a donc été de développer une méthode qui estime le Foyer d'Expansion en pensant estimer l'Épipole.
+- En ligne droite, les deux concepts coïncident, ce qui explique les bonnes performances de la méthode.
+- En virage, l'algorithme cherchait un Foyer d'Expansion qui n'existait plus géométriquement, ce qui menait inévitablement à une estimation instable et erronée.
+
+Cette limitation est donc fondamentale à l'approche choisie et ne peut être résolue par un simple affinage des paramètres.
+
+## Solution envisagée : Décomposition du mouvement caméra
+
+Une approche robuste consiste à séparer les composantes de translation et de rotation du mouvement de la caméra. Cette méthode repose sur les étapes suivantes :
+
+- Détection de points d'intérêt sur une image
+- Suivi de ces points dans l'image suivante
+- Calcul de la matrice fondamentale à partir des correspondances
+- Dérivation de la matrice essentielle à partir des paramètres de la caméra
+- Extraction du mouvement de translation pur, isolé de la rotation
+
+Cette approche devrait être robuste aux virages, et la majorité des composants nécessaires sont déjà disponibles dans OpenCV.
+
+## Leçon apprise
+
+Ma plus grande erreur stratégique fut de garder le lissage pour la fin. Je le voyais comme une "victoire facile", une cerise sur le gâteau, et j'ai donc sous-estimé son impact. C'était une double erreur.
+
+- J'ai sous-estimé son gain. Le lissage n'était pas un petit bonus, mais une amélioration majeure. Étant rapide à implémenter, j'aurais dû commencer par là pour obtenir très tôt des résultats solides.
+- J'ai mal compris son rôle. Plus important encore, le lissage n'était pas qu'une simple optimisation ; c'était mon meilleur outil de diagnostic. En supprimant le "bruit" de mes prédictions, il aurait immédiatement mis en évidence la faiblesse fondamentale de ma méthode dans les virages, m'évitant de passer des jours à perfectionner une approche limitée.
+
+La leçon est claire : il faut toujours implémenter les solutions à fort impact et faible effort en premier. Non seulement pour la performance, mais surtout parce qu'elles clarifient le vrai problème à résoudre et permettent de savoir si les efforts plus complexes sont justifiés.
+
+
+
 

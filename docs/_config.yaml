@@ -43,3 +43,13 @@ static_files:
   - "*.png"
   - "*.jpg"
   - "*.jpeg"
+
+# Valeurs par défaut pour les pages
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "dynamic_toc"
+      author: "Hugo Vaillaud"
+      show_date: true

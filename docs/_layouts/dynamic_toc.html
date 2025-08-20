@@ -257,6 +257,26 @@
                     <div class="col-md-8 col-lg-9">
                         <div class="main-content">
                             <article>
+                                {% if page.date %}
+                                <div class="article-meta mb-4 p-3" style="background-color: #f8f9fa; border-radius: 0.5rem; border: 1px solid #dee2e6;">
+                                    <div class="d-flex flex-wrap gap-3">
+                                        <div>
+                                            <strong>{% if page.lang == 'fr' %}Publié le{% else %}Published on{% endif %}:</strong>
+                                            <time datetime="{{ page.date | date_to_xmlschema }}">
+                                                {{ page.date | date: "%B %d, %Y" }}
+                                            </time>
+                                        </div>
+                                        {% if page.last_modified_at and page.last_modified_at != page.date %}
+                                        <div>
+                                            <strong>{% if page.lang == 'fr' %}Modifié le{% else %}Last modified{% endif %}:</strong>
+                                            <time datetime="{{ page.last_modified_at | date_to_xmlschema }}">
+                                                {{ page.last_modified_at | date: "%B %d, %Y" }}
+                                            </time>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
                                 <div class="content" id="main-content">
                                     {{ content }}
                                 </div>

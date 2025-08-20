@@ -3,6 +3,8 @@ title: "Calibration de caméra embarquée dans une voiture semi-autonome"
 layout: dynamic_toc
 mathjax: true
 lang: fr
+date: 2025-08-20
+last_modified_at: 2025-08-20
 ---
 
 # Introduction
@@ -772,7 +774,7 @@ Dans les visualisations ci-dessous :
 Dans la figure ci-dessous, on peut observer la distance euclidienne entre la prédiction et le label pour chaque frame de chaque vidéo.
 
 <figure markdown>
-  <img src="../imgs/outro/distances.png" alt="Distribution des distances d'erreur">
+  <img src="../imgs/outro/distances.png" alt="Distribution des distances d'erreur" style="width: 90%;">
   <figcaption>Distance en pixels entre la prédiction et le label pour chaque frame de chaque vidéo</figcaption>
 </figure>
 

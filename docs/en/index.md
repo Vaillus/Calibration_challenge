@@ -3,6 +3,8 @@ title: "Onboard Camera Calibration in a Semi-Autonomous Car"
 layout: dynamic_toc
 mathjax: true
 lang: en
+date: 2025-08-20
+last_modified_at: 2025-08-20
 ---
 
 # Introduction
@@ -806,7 +808,7 @@ In the visualizations below:
 In the figure below, we can observe the Euclidean distance between prediction and label for each frame of each video.
 
 <figure markdown>
-  <img src="../imgs/outro/distances.png" alt="Error distance distribution">
+  <img src="../imgs/outro/distances.png" alt="Error distance distribution" style="width: 90%;">
   <figcaption>Distance in pixels between prediction and label for each frame of each video</figcaption>
 </figure>
 

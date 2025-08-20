@@ -73,15 +73,19 @@ def plot_offsets_single_vid(run_name, video_id):
     plt.legend()
     plt.show()
 
-def plot_offsets_multi_vids(run_name:str, type:Optional[str] = None):
+def plot_offsets_multi_vids(run_name:str, type:Optional[str] = None, video_ids:Optional[List[int]] = None):
     if type is None:
         type = "pred"
     fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     axes = axes.flatten()
+    axes[-1].set_visible(False)  # Hide the last subplot (position (1,2))
+    axes = axes.flatten()
     linewidth = 0.7
 
-    for video_id in range(5):
-        ax = axes[video_id]
+    if video_ids is None:
+        video_ids = range(5)
+    for i, video_id in enumerate(video_ids):
+        ax = axes[i]
         if type == "pred":
             x_diff, y_diff, dist = get_offsets(run_name, video_id)
         elif type == "label":
@@ -96,6 +100,9 @@ def plot_offsets_multi_vids(run_name:str, type:Optional[str] = None):
         ax.set_ylim(-60, 60)
         ax.axhline(y=0, color='red', linestyle='--', alpha=0.7)
         ax.set_title(f"Video {video_id}")
+        ax.set_xlabel("Frame Number")
+        ax.set_ylabel("Offset from median (pixels)")
+        ax.grid(True, alpha=0.3)
     plt.show()
     
 
@@ -105,5 +112,6 @@ if __name__ == "__main__":
     video_id = 0
     plot_offsets_multi_vids(
         run_name, 
-        # "label"
+        "label",
+        video_ids=list(range(0,5))
         )

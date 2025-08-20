@@ -184,13 +184,13 @@ def plot_all_videos_comparison(run_name="vanilla"):
                     if len(segment) > 0:  # Only plot non-empty segments
                         ax.plot(segment[:, 0], segment[:, 1], color=color, linewidth=0.6, alpha=0.8)
             
-            ax.set_ylim(0, 150)  # Set fixed Y-axis limit
+            ax.set_ylim(0, 120)  # Set fixed Y-axis limit
             
             # Calculate mean excluding zero distances
             if len(valid_distances) > 0:
                 mean_dist = np.mean(valid_distances)
                 ax.axhline(y=mean_dist, color='red', linestyle='--', alpha=0.7)
-                ax.set_title(f'Video {video_id} (Mean: {mean_dist:.1f}px)')
+                ax.set_title(f'Video {video_id}')
                 
                 stats.append({
                     'video_id': video_id,
@@ -221,7 +221,7 @@ def plot_all_videos_comparison(run_name="vanilla"):
     for i in range(len(all_distances), 6):
         axes[i].set_visible(False)
     
-    fig.suptitle(f'All Videos Comparison - Run "{run_name}"', fontsize=16)
+    # fig.suptitle(f'All Videos Comparison - Run "{run_name}"', fontsize=16)
     plt.tight_layout()
     plt.show()
     
@@ -524,4 +524,4 @@ def main(run_name="5"):
             print("Invalid choice. Please enter 0-6.")
 
 if __name__ == "__main__":
-    main("8") 
+    main("5_7_smoothed") 

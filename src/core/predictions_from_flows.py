@@ -334,26 +334,26 @@ def main(
 
 
 if __name__ == "__main__":
-    mean_point_run_name = "5_4"
+    mean_point_run_name = "5_6"
     is_mean_point_used = True
     config = {
         "norm": {
             "is_used": True,
-            "k": 150,
-            "x0": 13
+            "k": 180,
+            "x0": 8
         },
         "colinearity": {
             "is_used": True,
-            "k": 150,
-            "x0": 0.96,
+            "k": 152,
+            "x0": 1.245,
             "use_mean_points": is_mean_point_used,
             "mean_point_run_name": mean_point_run_name
         },
         "heatmap": {
-            "is_used": True,
-            "weight": 0.79,
+            "is_used": False,
+            "weight": 0.00,
             "path": "/Users/hugovaillaud/Documents/code/ibiza_project/calib_challenge/data/intermediate/heatmaps/unfiltered/global/global_heatmap.npy"
         }
     }
     # Exemple d'utilisation sans filtrage
-    main(video_indices=[0,1,2,3,4], config=config, run_name="5_5", mean_point_run_name=mean_point_run_name, is_mean_point_used=is_mean_point_used) 
+    main(video_indices=[0,1,2,3,4], config=config, run_name="5_7", mean_point_run_name=mean_point_run_name, is_mean_point_used=is_mean_point_used) 

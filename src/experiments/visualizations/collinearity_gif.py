@@ -3,6 +3,9 @@ import numpy as np
 
 class CollinearityScoreGif(Scene):
     def construct(self):
+        # Fond blanc
+        self.camera.background_color = WHITE
+        
         # Configuration de base
         origin = ORIGIN
         
@@ -60,7 +63,7 @@ class CollinearityScoreGif(Scene):
         ))
         
         # Éléments fixes
-        title = Text("Score de Colinéarité", font_size=32)
+        title = Text("Score de Colinéarité", font_size=32, color=BLACK)
         title.to_edge(UP)
         
         # Labels fixes en haut à gauche, l'un sous l'autre pour plus de lisibilité
@@ -91,10 +94,10 @@ class CollinearityScoreGif(Scene):
         )
         
         # Animation : rotation complète qui boucle parfaitement
-        # Pour 32 frames à 32 fps = 1 seconde exactement
+        # 2 secondes pour une rotation plus lente
         self.play(
             green_angle.animate.set_value(2 * PI),
-            run_time=1,  # 1 seconde pour 32 frames à 32 fps
+            run_time=2,  # 2 secondes pour une animation plus lente
             rate_func=linear
         )
         
@@ -110,7 +113,7 @@ class CollinearityScoreGif(Scene):
             angle_diff += 2*PI
             
         arc = Arc(radius=0.8, start_angle=red_angle, angle=angle_diff, 
-                 color=YELLOW, stroke_width=3)
+                 color=PURPLE, stroke_width=3)
         arc.move_arc_center_to(ORIGIN)
         return arc
     
@@ -148,7 +151,7 @@ class CollinearityScoreGif(Scene):
         green_vec_norm = np.array([np.cos(green_angle), np.sin(green_angle)])
         collinearity_score = np.dot(red_vec_norm, green_vec_norm)
         
-        score_text = Text(f"Score: {collinearity_score:.3f}", font_size=24)
+        score_text = Text(f"Score: {collinearity_score:.3f}", font_size=24, color=BLACK)
         score_text.next_to(gauge_background, DOWN)
         return score_text
     
@@ -157,13 +160,13 @@ class CollinearityScoreGif(Scene):
         labels = []
         
         # Labels -1, 0, 1
-        label_1 = Text("1", font_size=16)
+        label_1 = Text("1", font_size=16, color=BLACK)
         label_1.next_to(gauge_background.get_top(), RIGHT, buff=0.1)
         
-        label_0 = Text("0", font_size=16)
+        label_0 = Text("0", font_size=16, color=BLACK)
         label_0.next_to(gauge_background.get_center(), RIGHT, buff=0.1)
         
-        label_minus1 = Text("-1", font_size=16)
+        label_minus1 = Text("-1", font_size=16, color=BLACK)
         label_minus1.next_to(gauge_background.get_bottom(), RIGHT, buff=0.1)
         
         return [label_1, label_0, label_minus1] 

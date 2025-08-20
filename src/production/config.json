@@ -1,6 +1,14 @@
 {
     "prediction_method": "colinearity",
     "use_segmentation": true,
+    "optimizer_type": "lbfgs",
+    "optimizer_config": {
+        "max_iter": 100,
+        "display_warnings": false,
+        "ftol": 1e-9,
+        "gtol": 1e-7
+    },
+    "filter_config": null,
     "prediction_parameters": {},
     "directories": {
         "pred_dir": "pred/5"

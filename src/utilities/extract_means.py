@@ -9,7 +9,13 @@ Ce script :
 4. Sauvegarde les résultats dans data/outputs/means/5/
 
 Usage:
-    python src/utilities/extract_means.py
+    python src/utilities/extract_means.py [run_name] [video_id1] [video_id2] ...
+    
+Exemples:
+    python src/utilities/extract_means.py                    # Défaut: run "5_6", vidéos 0-4
+    python src/utilities/extract_means.py "mon_run"          # Run "mon_run", vidéos 0-4
+    python src/utilities/extract_means.py "5_6" 5 6 7        # Run "5_6", vidéos 5,6,7
+    python src/utilities/extract_means.py "unlabeled" 5 6 7 8 9  # Run "unlabeled", vidéos 5-9
 
 Note: Ce script était précédemment nommé "extract_median.py" mais calculait déjà des moyennes.
 Le nom a été corrigé pour refléter le comportement réel (np.nanmean).
@@ -66,18 +72,22 @@ def convert_angles_to_pixels(angles_data: np.ndarray) -> np.ndarray:
     return np.array(pixels_data)
 
 
-def process_video_predictions(run_name: str = "5") -> None:
-    """Traite les prédictions d'une vidéo spécifique.
+def process_video_predictions(run_name: str = "5", video_ids: list = None) -> None:
+    """Traite les prédictions pour les vidéos spécifiées.
     
     Args:
-        video_num: Numéro de la vidéo à traiter (défaut: 5)
+        run_name: Nom du run de prédictions (défaut: "5")
+        video_ids: Liste des IDs de vidéos à traiter (défaut: [0,1,2,3,4])
     """
     # Utilisation des fonctions de chemins centralisées
     pred_dir = get_pred_dir(run_name)
     output_dir = ensure_dir_exists(get_means_dir(run_name))
     
-    # Fichiers à traiter (0 à 4)
-    file_numbers = range(5)
+    # Fichiers à traiter
+    if video_ids is None:
+        file_numbers = range(5)  # Défaut: vidéos 0 à 4
+    else:
+        file_numbers = video_ids
     
     for file_num in file_numbers:
         print(f"Traitement du fichier {file_num}...")
@@ -121,7 +131,13 @@ def process_video_predictions(run_name: str = "5") -> None:
 
 def main():
     """Fonction principale."""
-    process_video_predictions(run_name="8")
+    
+    # Paramètres par défaut
+    run_name = "5_6"
+    video_ids = list(range(5, 10))
+    
+    
+    process_video_predictions(run_name=run_name, video_ids=video_ids)
 
 
 if __name__ == "__main__":

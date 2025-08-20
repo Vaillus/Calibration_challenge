@@ -48,12 +48,12 @@ def plot_video_distribution(ax, gt_pixels, pred_pixels):
     ax.scatter(gt_pixels[:, 0], gt_pixels[:, 1], c='blue', alpha=0.1, s=5)
     
     # Moyennes (cercles)
-    ax.plot(pred_mean[0], pred_mean[1], 'ro', markersize=15)
-    ax.plot(gt_mean[0], gt_mean[1], 'bo', markersize=15)
+    ax.plot(pred_mean[0], pred_mean[1], 'ro', markersize=10)
+    ax.plot(gt_mean[0], gt_mean[1], 'bo', markersize=10)
     
     # Médianes (triangles)
-    ax.plot(pred_median[0], pred_median[1], 'r^', markersize=15)
-    ax.plot(gt_median[0], gt_median[1], 'b^', markersize=15)
+    ax.plot(pred_median[0], pred_median[1], 'r^', markersize=10)
+    ax.plot(gt_median[0], gt_median[1], 'b^', markersize=10)
     
     # Écarts-types (ellipses)
     ellipse_pred = Ellipse((pred_mean[0], pred_mean[1]), 
@@ -102,8 +102,8 @@ def main(run_name: str):
         except Exception as e:
             print(f"Video {video_idx}: ERROR - {e}")
 
-    # Ajout des légendes au dernier sous-graphique
-    axes[1, 2].legend(handles=create_legends(), fontsize=8, ncol=2)
+    # Ajout de la légende à la figure globale
+    fig.legend(handles=create_legends(), loc='center', bbox_to_anchor=(0.83, 0.25), fontsize=10, ncol=1)
 
     # Suppression du dernier sous-graphique inutilisé
     fig.delaxes(axes[1, 2])
@@ -113,4 +113,4 @@ def main(run_name: str):
 
 
 if __name__ == "__main__":
-    main(run_name="8") 
+    main(run_name="5_6_smoothed") 

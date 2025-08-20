@@ -115,6 +115,9 @@ def compute_global_collinearity_score(candidate_point: Tuple[float, float],
 
 class GlobalCollinearityAnimation(Scene):
     def construct(self):
+        # Fond blanc
+        self.camera.background_color = WHITE
+        
         # Charger les vraies données
         frame_rgb, x_coords, y_coords, u_flow, v_flow, gt_point, center_point = load_frame_data_for_animation()
         
@@ -208,7 +211,7 @@ class GlobalCollinearityAnimation(Scene):
         ))
         
         # Éléments fixes
-        title = Text("Score de Colinéarité Global", font_size=32)
+        title = Text("Score de Colinéarité Global", font_size=32, color=BLACK)
         title.to_edge(UP)
         
         # Labels fixes en haut à gauche, l'un sous l'autre pour plus de lisibilité
@@ -228,13 +231,13 @@ class GlobalCollinearityAnimation(Scene):
         ))
         
         # Graduations de la jauge (plage -0.5 à -1.0)
-        label_minus05 = Text("-0.5", font_size=16)
+        label_minus05 = Text("-0.5", font_size=16, color=BLACK)
         label_minus05.next_to(gauge_background.get_top(), RIGHT, buff=0.1)
         
-        label_minus075 = Text("-0.75", font_size=16)
+        label_minus075 = Text("-0.75", font_size=16, color=BLACK)
         label_minus075.next_to(gauge_background.get_center(), RIGHT, buff=0.1)
         
-        label_minus1 = Text("-1.0", font_size=16)
+        label_minus1 = Text("-1.0", font_size=16, color=BLACK)
         label_minus1.next_to(gauge_background.get_bottom(), RIGHT, buff=0.1)
         
         # Points de référence
@@ -360,7 +363,7 @@ class GlobalCollinearityAnimation(Scene):
         )
         global_score = -global_score_positive  # Utiliser la valeur négative
         
-        score_text = Text(f"Score: {global_score:.3f}", font_size=24)
+        score_text = Text(f"Score: {global_score:.3f}", font_size=24, color=BLACK)
         score_text.next_to(gauge_background, DOWN)
         
         return score_text 

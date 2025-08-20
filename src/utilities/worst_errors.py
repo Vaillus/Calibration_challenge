@@ -201,14 +201,6 @@ def select_random_frames_from_7th_decile(run_name="5", n_frames=10) -> List[Tupl
     return [(int(vid), int(frame)) for vid, frame in selected_frames]
 
 
-def get_distance_distribution(run_name:str="vanilla", 
-                              video_id:int=None) -> np.ndarray:
-    """
-    Calcule la distribution des distances pour la run spécifiée, 
-    soit pour la vidéo spécifiée, soit pour toutes les vidéos.
-    """
-    pass
-
 def select_frames_from_decile(
         distances_with_ids:List[Tuple[float, int, int]],
         distances:List[float],

@@ -47,7 +47,7 @@ def get_pred_dir(folder_name:str) -> Path:
     return get_outputs_dir() / "pred" / folder_name
 
 
-def get_means_dir(video_num: Optional[int] = None) -> Path:
+def get_means_dir(video_num: Optional[int] = None, run_name:Optional[str]=None) -> Path:
     """Retourne le dossier des moyennes.
     
     Args:
@@ -90,6 +90,11 @@ def get_masks_dir() -> Path:
 def get_labeled_dir() -> Path:
     """Retourne le dossier des données labellisées (ground truth)."""
     return get_inputs_dir() / "labeled"
+
+
+def get_unlabeled_dir() -> Path:
+    """Retourne le dossier des données non-labellisées."""
+    return get_inputs_dir() / "unlabeled"
 
 
 def ensure_dir_exists(path: Path) -> Path:

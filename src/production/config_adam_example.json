@@ -1,0 +1,20 @@
+{
+    "prediction_method": "colinearity",
+    "use_segmentation": true,
+    "optimizer_type": "adam",
+    "optimizer_config": {
+        "lr": 10.0,
+        "beta1": 0.6,
+        "beta2": 0.98,
+        "eps": 1e-8,
+        "max_iter": 100,
+        "plateau_threshold": 0,
+        "plateau_patience": 3,
+        "pixel_patience": 5
+    },
+    "filter_config": null,
+    "prediction_parameters": {},
+    "directories": {
+        "pred_dir": "pred/adam_example"
+    }
+} 

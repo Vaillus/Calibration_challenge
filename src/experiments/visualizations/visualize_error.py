@@ -123,5 +123,5 @@ def visualize_temporal_errors(test_dir):
     plt.show()
 
 if __name__ == "__main__":
-    TEST_DIR = '5_4'  # This is now relative to pred directory
+    TEST_DIR = '5_7_smoothed'  # This is now relative to pred directory
     visualize_temporal_errors(TEST_DIR)

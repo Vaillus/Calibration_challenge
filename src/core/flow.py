@@ -87,7 +87,7 @@ def find_separation_points(flow, mask):
     
     return best_x, best_y  
 
-def _find_best_separation(means, valid_indices):
+def _find_best_separation(means):
     """
     Trouve le meilleur point de séparation dans un tableau de moyennes.
     

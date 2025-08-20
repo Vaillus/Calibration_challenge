@@ -772,7 +772,7 @@ Dans les visualisations ci-dessous :
 Dans la figure ci-dessous, on peut observer la distance euclidienne entre la prédiction et le label pour chaque frame de chaque vidéo.
 
 <figure markdown>
-  <img src="../imgs/outro/distances.png" alt="Distribution des distances d'erreur">
+  <img src="../imgs/outro/distances.png" alt="Distribution des distances d'erreur" style="width: 90%;">
   <figcaption>Distance en pixels entre la prédiction et le label pour chaque frame de chaque vidéo</figcaption>
 </figure>
 

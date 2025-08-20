@@ -6,15 +6,15 @@ This project was developed iteratively, starting from a simple baseline and prog
 
 ➡️ **[Read the Full, Detailed Write-Up](./docs/en/index.md)**
 
----
+<!-- --- -->
 
-## 🏆 Current Performance on Labeled Data: 8.58%
+<!-- ## 🏆 Current Performance on Labeled Data: 8.58%
 
 After several stages of optimization and post-processing on the 5 labeled videos, the model achieved an error score of **8.58%**. The evaluation metric considers 0% a perfect score and 100% the score of a naive baseline that always predicts the center of the image.
 
 The predictions for the unlabeled test set have been generated and are ready for submission to obtain the final score on the leaderboard.
 
----
+--- -->
 
 ##  odyssey: My Journey to the Solution
 

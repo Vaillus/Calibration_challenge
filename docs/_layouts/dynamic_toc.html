@@ -59,7 +59,7 @@
             background: rgba(0, 123, 255, 0.1);
         }
         
-        /* Styles pour différencier h1 et h2 */
+        /* Styles pour différencier h2 et h3 */
         .toc-list a.toc-h1 {
             font-weight: 600;
             font-size: 1rem;
@@ -68,7 +68,7 @@
         }
         
         .toc-list a.toc-h2 {
-            padding-left: 2.5rem;  /* Indentation pour les h2 */
+            padding-left: 2.5rem;  /* Indentation pour les h3 */
             font-size: 0.85rem;
             color: #6c757d;
             border-left-width: 2px;
@@ -82,7 +82,7 @@
             background: rgba(0, 123, 255, 0.1);
         }
         
-        /* Animation pour les h2 qui apparaissent/disparaissent */
+        /* Animation pour les h3 qui apparaissent/disparaissent */
         .toc-list li.h2-item {
             opacity: 0;
             max-height: 0;
@@ -292,9 +292,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log("Initialisation du TOC contextuel...");
             
-            // Trouver tous les headers h1 et h2
-            const h1Headers = document.querySelectorAll('#main-content h1');
-            const h2Headers = document.querySelectorAll('#main-content h2');
+            // Trouver tous les headers h2 et h3 (h1 est le titre principal)
+            const h1Headers = document.querySelectorAll('#main-content h2');
+            const h2Headers = document.querySelectorAll('#main-content h3');
             const tocList = document.getElementById('toc-list');
             
             console.log("H1 trouvés:", h1Headers.length, "H2 trouvés:", h2Headers.length);
@@ -309,7 +309,7 @@
             });
             
             if (h1Headers.length === 0) {
-                console.log("Aucun header h1 trouvé!");
+                console.log("Aucun header h2 trouvé!");
                 tocList.innerHTML = '<li><em>Aucun titre trouvé</em></li>';
                 return;
             }
@@ -328,14 +328,14 @@
                     h2s: []
                 };
                 
-                // Trouver tous les h2 qui suivent ce h1 jusqu'au prochain h1
+                // Trouver tous les h3 qui suivent ce h2 jusqu'au prochain h2
                 let currentElement = h1.nextElementSibling;
                 const nextH1 = h1Headers[index + 1];
                 
                 while (currentElement && currentElement !== nextH1) {
-                    if (currentElement.tagName === 'H2') {
+                    if (currentElement.tagName === 'H3') {
                         if (!currentElement.id) {
-                            currentElement.id = 'h2-' + section.h2s.length + '-of-h1-' + index;
+                            currentElement.id = 'h3-' + section.h2s.length + '-of-h2-' + index;
                         }
                         section.h2s.push(currentElement);
                     }
@@ -347,12 +347,12 @@
             
             console.log("Sections organisées:", sections);
             
-            // Créer le TOC initial avec tous les h1
+            // Créer le TOC initial avec tous les h2
             function createInitialTOC() {
                 tocList.innerHTML = '';
                 
                 sections.forEach((section, sectionIndex) => {
-                    // Ajouter le h1
+                    // Ajouter le h2 (qui est maintenant notre niveau principal)
                     const h1Li = document.createElement('li');
                     h1Li.className = 'h1-item';
                     
@@ -365,7 +365,7 @@
                     h1Li.appendChild(h1A);
                     tocList.appendChild(h1Li);
                     
-                    // Ajouter les h2 de cette section (cachés au début)
+                    // Ajouter les h3 de cette section (cachés au début)
                     section.h2s.forEach((h2, h2Index) => {
                         const h2Li = document.createElement('li');
                         h2Li.className = 'h2-item';
@@ -382,7 +382,7 @@
                 });
             }
             
-            // Fonction pour montrer/cacher les h2 d'une section
+            // Fonction pour montrer/cacher les h3 d'une section
             function showH2sForSection(activeSectionIndex) {
                 const allH2Items = document.querySelectorAll('.h2-item');
                 
@@ -402,7 +402,7 @@
                 let currentSection = -1;
                 let currentH2 = '';
                 
-                // Trouver la section h1 active
+                // Trouver la section h2 active
                 sections.forEach((section, index) => {
                     const rect = section.h1.getBoundingClientRect();
                     if (rect.top <= 150) {
@@ -410,7 +410,7 @@
                     }
                 });
                 
-                // Si on est dans une section, trouver le h2 actif
+                // Si on est dans une section, trouver le h3 actif
                 if (currentSection >= 0) {
                     sections[currentSection].h2s.forEach(h2 => {
                         const rect = h2.getBoundingClientRect();
@@ -425,17 +425,17 @@
                     link.classList.remove('active');
                 });
                 
-                // Activer le h1 de la section courante
+                // Activer le h2 de la section courante
                 if (currentSection >= 0) {
                     const h1Link = document.querySelector(`[data-section-index="${currentSection}"]`);
                     if (h1Link) {
                         h1Link.classList.add('active');
                     }
                     
-                    // Montrer les h2 de cette section
+                    // Montrer les h3 de cette section
                     showH2sForSection(currentSection);
                     
-                    // Activer le h2 courant si il y en a un
+                    // Activer le h3 courant si il y en a un
                     if (currentH2) {
                         const h2Link = document.querySelector(`[href="#${currentH2}"]`);
                         if (h2Link) {
@@ -443,7 +443,7 @@
                         }
                     }
                 } else {
-                    // Aucune section active, cacher tous les h2
+                    // Aucune section active, cacher tous les h3
                     showH2sForSection(-1);
                 }
             }

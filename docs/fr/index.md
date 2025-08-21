@@ -7,12 +7,14 @@ date: 2025-08-20
 last_modified_at: 2025-08-20
 ---
 
-# Introduction
+# Calibration de caméra embarquée dans une voiture semi-autonome
+
+## Introduction
 Bienvenue sur mon blog ! J'ai récemment entrepris de résoudre le challenge de calibration de caméra de Comma.ai, un problème de vision par ordinateur passionnant dans le monde de la conduite semi-autonome
 <!-- Mon approche m'a finalement permis de me hisser à la Xème place du classement -->
 , et j'ai eu envie de partager cette expérience. 
 Cet article retrace donc mon parcours, en expliquant pas à pas ma tentative pour résoudre ce défi technique.
-## Contexte
+### Contexte
 Comma.ai est une entreprise qui cherche à démocratiser la conduite autonome. Là où Tesla vend des voitures complètes, comma.ai développe Openpilot : un système open-source qui transforme votre voiture existante en véhicule semi-autonome.
 
 C'est une sorte d'équivalent d'Android face à iOS, mais pour les voitures.
@@ -20,7 +22,7 @@ C'est une sorte d'équivalent d'Android face à iOS, mais pour les voitures.
 Ils proposent un [ensemble de challenges publics](https://comma.ai/leaderboard) sur leur github, avec un prix à la clé pour la première personne parvenant à résoudre le challenge, et un classement public qui est maintenu au fil du temps.
 
 Un challenge en particulier a attiré mon attention, bien qu'il ait été publié il y a quelques années et que le prix ait été remporté depuis longtemps. Il s'agit du challenge de calibration de caméra embarquée dans une voiture semi-autonome.
-## Le problème à résoudre
+### Le problème à résoudre
 Dans les voitures équipées du système Openpilot, un dispositif dédié comma.ai (comme le comma 3X) sert de caméra principale. Contrairement aux Tesla où les caméras sont fixées à des positions précises en usine, chaque installation d'Openpilot est unique : le dispositif peut être placé à différentes positions sur le pare-brise, avec différentes orientations. Pour que le système d'assistance à la conduite fonctionne correctement, il doit comprendre comment le dispositif et ses caméras sont orientés par rapport à la voiture. C'est ce qu'on appelle la calibration de caméra.
 
 <figure>
@@ -28,7 +30,7 @@ Dans les voitures équipées du système Openpilot, un dispositif dédié comma.
   <figcaption>Exemple d'un dispositif comma.ai positionné dans le cockpit d'une voiture</figcaption>
 </figure>
 
-## L'objectif
+### L'objectif
 Ce challenge demande de développer un algorithme qui, à partir d'une vidéo prise par le dispositif comma.ai pendant la conduite, peut déterminer dans quelle direction la voiture se déplace par rapport à l'orientation de la caméra.
 
 Pour décrire cette direction de déplacement de manière précise dans le référentiel de la caméra, je dois prédire deux angles clés pour chaque image de la vidéo:
@@ -43,10 +45,10 @@ Pour décrire cette direction de déplacement de manière précise dans le réf�
 	- θ > 0 : la voiture tourne à droite
 	- θ < 0 : la voiture tourne à gauche
 
-### L'épipole
+#### L'épipole
 En vision par ordinateur, le point vers lequel la voiture se dirige est appelé "**épipole**". C'est le point où convergent les trajectoires des objets stationnaires lorsque la caméra se déplace en ligne droite. 
 Avec la distance focale donnée de 910 pixels, on peut établir une relation directe entre les angles (pitch et yaw) et les coordonnées (x,y) de ce point dans l'image.
-## Les données disponibles
+### Les données disponibles
 Pour résoudre ce problème, j'ai accès à 10 vidéos d'une minute chacune, soit environ 1200 frames.
 5 vidéos sont labellisées avec les angles corrects déjà identifiés, et 5 vidéos sont non labellisées.
 Chaque vidéo montre des conditions de conduite différentes (environnement, luminosité, etc.)
@@ -55,9 +57,9 @@ Chaque vidéo montre des conditions de conduite différentes (environnement, lum
   <figcaption>Aperçu de 9 vidéos du dataset</figcaption>
 </figure>
 
-## Critère d'évaluation
+### Critère d'évaluation
 Les prédictions sont évaluées sur une échelle où 0% correspond à une prédiction parfaite et 100% correspond au score qu'on obtient en prédisant simplement le centre de l'image. Plus le score est élevé, plus l'erreur est importante.
-## Stratégies considérées
+### Stratégies considérées
 En analysant le leaderboard du challenge, j'ai remarqué un agglutinement de scores autour de 20%. Ce phénomène suggère fortement un plafonnement des approches classiques par réseaux de neurones (NN), probablement limités par la faible quantité de données d'entraînement disponibles (seulement 5 vidéos labellisées).
 
 J'ai donc considéré trois approches principales :
@@ -76,9 +78,9 @@ Surtout, il existe un lien conceptuel direct entre le flux optique et l'épipole
 Ce point central depuis lequel tout semble diverger est précisément l'épipole : le point vers lequel la voiture se dirige. Le flux optique, en calculant les vecteurs de déplacement apparent de chaque élément entre deux images consécutives, capture mathématiquement ce phénomène visuel. En théorie, lorsque la caméra se déplace en ligne droite, tous les vecteurs de flux optique des points stationnaires de l'environnement pointent dans des directions qui s'éloignent de l'épipole.
 
 Cette relation fondamentale fait du flux optique un outil naturel pour localiser l'épipole.
-# 1er arc : Flux optique
+## 1er arc : Flux optique
 Pour démarrer mon exploration, j'ai d'abord voulu établir une baseline avec l'approche la plus directe et intuitive possible. Dans cet arc, j'introduis le flux optique - une technique fondamentale qui restera au cœur de toutes mes approches tout au long de ce projet. 
-## Implémentation du flux optique
+### Implémentation du flux optique
 Maintenant que le lien conceptuel entre flux optique et épipole est établi, il me fallait choisir comment implémenter concrètement cette approche pour exploiter cette relation géométrique.
 
 Le package `opencv` propose deux méthodes principales pour calculer le flux optique :
@@ -86,7 +88,7 @@ Le package `opencv` propose deux méthodes principales pour calculer le flux o
 - **cv2.calcOpticalFlowPyrLK()** : dite "sparse", cette méthode ne calcule le flux optique que pour des points spécifiques préalablement identifiés (généralement des coins ou des points d'intérêt). Elle est plus rapide mais nécessite une sélection pertinente des points à suivre.
 
 N'ayant pas de contrainte forte de temps de calcul et souhaitant mesurer le mouvement relatif global de l'environnement par rapport au véhicule, j'ai opté pour l'approche dense avec l'algorithme de Farnebäck. Cette méthode me permet d'obtenir un champ vectoriel complet qui représente le mouvement apparent entre deux frames consécutives.
-### Visualisation
+#### Visualisation
 J'ai donc implémenté le calcul du flux optique dense entre frames consécutives, ce qui produit un champ de vecteurs comme illustré ci-dessous :
 <figure>
   <img src="../imgs/1/flow_vector_example.png" alt="Exemple de champ de vecteurs de flux optique" style="width: 90%;" />
@@ -95,7 +97,7 @@ J'ai donc implémenté le calcul du flux optique dense entre frames consécutive
 
 Sur cette visualisation, chaque flèche représente le déplacement apparent d'un pixel entre deux frames. On peut observer que dans un scénario de déplacement en ligne droite, ces vecteurs semblent ou diverger depuis un point particulier - ça devrait être notre épipole.
 
-## Première approche pour l'estimation de l'épipole
+### Première approche pour l'estimation de l'épipole
 
 À partir du champ de vecteurs de flux optique obtenu, j'ai cherché à localiser l'épipole en utilisant une méthode intuitive basée sur l'analyse des changements de direction des vecteurs.
 
@@ -127,7 +129,7 @@ Isolons la méthode pour trouver l'axe de séparation vertical:
 
 En appliquant cette méthode pour les axes horizontal et vertical, j'obtiens les coordonnées de ma première estimation de l'épipole en calculant le point d'intersection entre les deux lignes de séparation.
 
-## Résultats et limitations
+### Résultats et limitations
 Avec cette méthode très simple, j'obtiens ma baseline - un score de **1960.20%**. Si vous vous demandiez s'il est possible de faire pire que 100%, vous avez votre réponse ! 
 
 Bien que les figures présentées un peu plus haut montrent une séparation relativement claire sur certaines frames, cette méthode échoue complètement sur de nombreuses autres situations. Dans ces cas problématiques, les lignes de séparation se retrouvent collées aux bords de l'image, produisant des prédictions aberrantes. 
@@ -139,8 +141,8 @@ J'ai notamment identifié plusieurs éléments qui handicapent la prédiction de
   <figcaption>Exemple de prédiction avec la méthode de l'arc 1</figcaption>
 </figure>
 
-# 2ème arc : Segmentation
-## Problèmes identifiés avec la méthode précédente
+## 2ème arc : Segmentation
+### Problèmes identifiés avec la méthode précédente
 Avec la méthode précédente basée uniquement sur le flux optique, certaines frames donnent des résultats acceptables, mais l'ensemble est très bruité. Dans certains cas, l'algorithme échoue complètement comme on peut le voir dans ces exemples:
 <div style="display: flex; justify-content: space-between;">
   <img src="../imgs/2/sep_real_2.png" style="width: 48%;" />
@@ -157,13 +159,13 @@ Avec la méthode précédente basée uniquement sur le flux optique, certaines f
 
 La solution devient évidente: il faut segmenter et ignorer à la fois le capot de la voiture et les éléments mobiles du décor (autres véhicules, piétons) susceptibles de fausser notre estimation.
 
-## Choix des méthodes de segmentation
+### Choix des méthodes de segmentation
 Après une brève recherche, j'ai identifié deux algorithmes prometteurs pour la segmentation:
-### SAM 2 de Meta
+#### SAM 2 de Meta
 SAM 2 de Meta est un modèle de segmentation très général, capable de traiter presque n'importe quel objet. Cependant, il est très lent et exigeant en ressources, ce qui le rend inadapté aux applications temps réel ou à une utilisation sur des machines personnelles.
 
 J'ai été initialement attiré par les capacités de SAM 2, mais j'ai rapidement déchanté: même les versions les plus légères du modèle étaient difficiles à charger sur la puce M1 de mon Mac, et la version "large" n'avait toujours pas fini de charger après 20 minutes d'attente. Cette contrainte matérielle, que je m'étais imposée pour ce projet (utiliser uniquement mon Mac personnel), m'a poussé vers une alternative.
-### YOLOv8-seg
+#### YOLOv8-seg
 Ce modèle présente plusieurs avantages:
 - Rapide et efficace
 - Excellente détection des véhicules et autres objets communs
@@ -179,9 +181,9 @@ J'ai donc opté pour YOLOv8-seg, qui s'est avéré rapide et globalement efficac
 J'ai configuré YOLO pour qu'il segmente uniquement les véhicules, en excluant les éléments statiques du décor comme les feux tricolores, bien qu'il soit aussi capable de les détecter.
 
 
-### Segmentation manuelle du capot
+#### Segmentation manuelle du capot
 Un problème persistait cependant: YOLOv8 ne détecte pas le capot de la voiture, puisqu'il n'est pas entraîné pour cette tâche spécifique. J'ai donc développé rapidement une interface simple me permettant de segmenter manuellement le capot sur la première frame de chaque vidéo. Cette segmentation manuelle est ensuite appliquée à toutes les frames de la vidéo correspondante.
-## Résultats et amélioration des performances
+### Résultats et amélioration des performances
 L'application de cette segmentation combinée (YOLOv8 pour les objets mobiles + segmentation manuelle du capot) a permis de réduire le score d'erreur à **812.57%**, représentant une amélioration d'environ 60% par rapport à la méthode basée uniquement sur le flux optique.
 
 <figure>
@@ -190,8 +192,8 @@ L'application de cette segmentation combinée (YOLOv8 pour les objets mobiles + 
 </figure>
 
 Bien que ce score reste très élevé et loin d'être satisfaisant, cette amélioration confirme l'importance de la segmentation dans notre approche. Cette étape de prétraitement sera conservée et utilisée dans toutes les méthodes suivantes.
-# 3eme arc : nouvelle méthode pour estimation de l'épipole.
-## Principe du score de colinéarité
+## 3eme arc : nouvelle méthode pour estimation de l'épipole.
+### Principe du score de colinéarité
 Dans cette nouvelle approche, je m'attaque directement au problème fondamental : comment trouver le point de convergence des vecteurs de flux optique (l'épipole) de manière plus précise ?
 Lorsque le véhicule dans lequel la caméra est embarqué se déplace en ligne droite, tous les objets stationnaires semblent "s'écouler" depuis un point unique - l'épipole. Ce phénomène crée un champ de vecteurs avec une propriété géométrique essentielle : les vecteurs de flux optique des objets stationnaires pointent dans des directions qui s'éloignent de l'épipole.
 
@@ -223,13 +225,13 @@ Où P est l'ensemble des pixels dans l'image.
 Puisque les vecteurs de flux optique devraient pointer dans la direction opposée au vecteur allant du pixel à l'épipole (pour les objets stationnaires), l'objectif est de trouver le point $e^*$ qui minimise ce score :
 $$e^* = \arg\min_{e} S(e)$$
 Cette méthode transforme notre problème en une tâche d'optimisation : trouver le point qui minimise le score de colinéarité global.
-## Approche par optimisation
+### Approche par optimisation
 Pour optimiser mon estimation de la position de l'épipole sur l'image, j'ai donc besoin de minimiser le score de colinéarité global.
-### Filtrage préliminaire des vecteurs
+#### Filtrage préliminaire des vecteurs
 Lors de mes observations initiales des champs de vecteurs de flux optique, j'ai remarqué un phénomène important: les vecteurs de grande amplitude pointent généralement dans la direction opposée à l'épipole de manière cohérente, tandis que les vecteurs de très petite norme présentent un comportement beaucoup plus bruité.
 
 Pour améliorer la robustesse de mon estimation, j'ai donc décidé d'appliquer un filtrage simple : éliminer tous les vecteurs dont la norme est inférieure à $10^{-2}$. Ce seuil a été choisi un peu arbitrairement d'après mes observations. J'ai décidé de regarder ça de plus près dans la prochaine itération du projet.
-### Méthode d'optimisation
+#### Méthode d'optimisation
 
 En visualisant le **score de colinéarité global** (défini précédemment) pour différentes positions candidates, j'observe que la fonction-objectif à minimiser présente une forme généralement **convexe**, ce qui la rend idéale pour l'optimisation.
 
@@ -242,14 +244,14 @@ Cette propriété m'a conforté dans le choix d'une **méthode d'optimisation ba
 
 Bien qu'une descente de gradient classique soit une option, j'ai choisi une approche plus sophistiquée : l'algorithme **L-BFGS-B** (Limited-memory BFGS with Bounds). Il s'agit d'une méthode **quasi-Newton** qui offre un excellent compromis performance/coût :
 Il converge en beaucoup moins d'itérations qu'une descente de gradient simple pour ce type de problème, bien que chaque itération soit plus complexe
-## Paramètres du flux optique
+### Paramètres du flux optique
 Les vecteurs de flux optique constituent les données brutes utilisées par toutes les méthodes d'optimisation subséquentes. Il m'a donc paru essentiel d'optimiser leur qualité pour améliorer l'ensemble du processus d'estimation de l'épipole.
 
 Pour cela, j'ai optimisé les paramètres de la fonction `cv2.calcOpticalFlowFarneback` d'OpenCV avec une grid search assez simple. L'objectif était de trouver les paramètres qui améliorent le score de colinéarité global pour les points fournis dans les labels.
 
 Après une série de tests, j'ai identifié une configuration satisfaisante qui améliore le critère sans trop augmenter le temps de calcul. Les principaux ajustements concernent la pyramide d'échelle (`pyr_scale`, `levels`), la taille de la fenêtre d'analyse (`winsize`) et les paramètres de lissage polynomial.
 
-## Résultats de cette nouvelle approche
+### Résultats de cette nouvelle approche
 Cette méthode donne une performance de **168.83%**, ce qui représente une amélioration d'environ 80% par rapport à l'itération précédente. 
 
 Cette amélioration significative valide l'approche combinée: nouveau critère de colinéarité, méthode d'optimisation par descente de gradient, et paramétrage optimisé du flux optique.
@@ -261,36 +263,36 @@ Cette amélioration significative valide l'approche combinée: nouveau critère 
 </figure>
 
 Voilà du progrès !
-# 4ème arc : filtrage des vecteurs
-## Repenser le filtrage
+## 4ème arc : filtrage des vecteurs
+### Repenser le filtrage
 Dans l'itération précédente du projet, j'ai arbitrairement choisi de filtrer les vecteurs et ne garder que ceux dont la norme est supérieure à $10^{-2}$ car j'ai observé que les vecteurs plus petits avaient tendance à être plus bruités.
 Mon intuition m'a mené à penser que creuser dans cette direction me mènerait à une amélioration significative des performances.
-### Critères de filtrage envisagés
+#### Critères de filtrage envisagés
 J'ai identifié trois critères prometteurs pour améliorer la sélection des vecteurs :
 1) **Norme des vecteurs** : Basé sur l'observation mentionnée précédemment - les vecteurs de faible amplitude sont effectivement plus bruités.
 2) **Score de colinéarité avec le centre** : Même parmi les grands vecteurs, certains pointent dans des directions aberrantes qui bruitent l'estimation. Puisque l'épipole reste généralement proche du centre de l'image, un vecteur qui ne "pointe" pas grossièrement vers la direction opposée au centre a peu de chances d'être informatif. Le score de colinéarité avec le centre constitue donc un bon proxy pour identifier les vecteurs utiles.
 3) **Distance au centre** : Intuition qu'il pourrait exister une corrélation entre la distance d'un vecteur au centre et sa capacité à contribuer positivement à l'estimation de l'épipole.
 
 Pour cette première exploration, j'ai retenu les deux premiers critères - ils me semblaient plus prometteurs et deux paramètres constituent déjà un bon point de départ.
-### Stratégies de filtrage
+#### Stratégies de filtrage
 J'ai ensuite considéré deux approches principales :
 
 **Filtrage adaptatif vs général** : Utiliser du machine learning pour trouver des paramètres spécifiques à chaque frame, ou trouver des paramètres qui fonctionnent bien en moyenne sur toutes les frames. Avec peu de données d'entraînement disponibles, j'ai opté pour la simplicité : des paramètres généraux.
 
 **Filtrage dur vs pondération** : Le filtrage dur élimine complètement certains vecteurs selon des critères binaires (ex: tous ceux de norme > 0.01), tandis que la pondération leur attribue des poids variables (ex: coefficient linéaire par rapport à leur score de colinéarité avec le centre). J'ai choisi de partir sur le filtrage dur en premier - plus simple à implémenter et à interpréter.
-### Approche retenue
+#### Approche retenue
 Ma stratégie est donc claire : filtrage dur avec paramètres généraux, appliqué sur la norme des vecteurs et leur score de colinéarité avec le centre. L'étape suivante consiste à trouver les valeurs optimales de ces paramètres.
 
-## Accélération de l'estimation de l'épipole
-### Motivation
+### Accélération de l'estimation de l'épipole
+#### Motivation
 J'ai fait des tests préliminaires sur des frames individuelles et j'ai observé que les paramètres optimaux pour le filtrage diffèrent d'une frame à l'autre. Il faut donc que je sois en mesure d'évaluer l'impact des filtres testés sur l'ensemble des frames pour trouver des paramètres qui fonctionnent bien en moyenne.
 
 **Le problème** :Évaluer l'épipole sur l'ensemble des frames des 5 vidéos prend 1 à 2 heures. Si je veux évaluer l'impact de différents jeux de paramètres de filtrage, je ne peux tester que 12 à 24 combinaisons par jour en faisant tourner mon ordinateur en continu. Pour une exploration systématique nécessitant des centaines d'évaluations, ce n'est pas une solution envisageable.
 **L'objectif** : Réduire le temps d'évaluation à ~10 secondes pour permettre l'exploration d'un large espace de paramètres avec des méthodes de recherche avancées.
 
 Il faut donc que je trouve un moyen d'accélérer drastiquement l'évaluation de l'impact des paramètres de filtrage sur l'estimation de l'épipole.
-### Optimisation par module
-#### Retour sur la pipeline de prédiction
+#### Optimisation par module
+##### Retour sur la pipeline de prédiction
 Pour trouver l'épipole sur une frame, ma méthode actuelle suit une pipeline séquentielle en trois modules :
 
 <figure>
@@ -305,7 +307,7 @@ Pour trouver l'épipole sur une frame, ma méthode actuelle suit une pipeline s�
 **Module 3 : Optimisation** - J'applique une descente de gradient pour minimiser le score de colinéarité présenté au troisième arc, ce qui me donne les coordonnées finales de notre estimation de l'épipole pour une frame.
 
 Dans cette section, nous suivrons mon cheminement visant à accélérer chacun de ces trois modules.
-#### Module 1 : génération des champs de vecteurs de flux optique
+##### Module 1 : génération des champs de vecteurs de flux optique
 **Précalcul des champs de vecteurs**
 L'optimisation la plus évidente consiste à précalculer tous les champs de vecteurs de flux optique plutôt que de les recalculer à chaque évaluation de paramètres de filtrage. 
 
@@ -320,7 +322,7 @@ En combinant cette quantification avec la compression .npz, j'ai obtenu 5 fichie
 **Résultat**
 Cette optimisation élimine complètement le temps de calcul du module 1 lors des tests de paramètres, permettant de passer directement au filtrage des vecteurs précalculés.
 
-#### Module 2 : filtrage
+##### Module 2 : filtrage
 **Le défi de performance** Maintenant que j'avais ces tenseurs de flux optique précalculés (un tenseur par vidéo, dimensions : n_frames × height × width × 2), il fallait paralléliser le filtrage des vecteurs. Ces opérations, initialement traitées frame par frame, représentaient un goulot d'étranglement majeur dans ma pipeline lorsqu'appliquées sur des milliers de frames.
 
 **Contraintes matérielles et choix technologiques** Travaillant sur un Mac M1 Pro, j'ai été confronté à une limitation connue : JAX (une bibliothèque de calcul numérique accéléré) n'exploite pas efficacement le GPU de cette architecture. Deux options s'offraient à moi :
@@ -334,7 +336,7 @@ Par curiosité et pour tester les limites des capacités de mon hardware, j'ai o
 - **Parallélisation sur les frames** : En traitant les vidéos par batches adaptés à la capacité GPU, j'ai pu calculer les scores de colinéarité sur toutes les frames d'une vidéo en 3-4 secondes contre plusieurs minutes auparavant.
 
 Grande victoire sur l'accélération de la vitesse de traitement sur ce module.
-#### Module 3 : optimisation
+##### Module 3 : optimisation
 **Un module critique pour l'évaluation**
 Ce troisième module occupe une position particulière dans ma pipeline : étant en dernier, c'est lui qui produit la prédiction finale de l'épipole. Par conséquent, c'est également à ce niveau que j'évalue l'impact de chaque jeu de paramètres de filtrage sur la qualité des résultats. Pour optimiser efficacement mes paramètres, je dois pouvoir tester rapidement des milliers de combinaisons différentes.
 
@@ -367,11 +369,11 @@ Cette stratégie d'arrêt prématuré s'est donc révélée doublement bénéfiq
 </figure>
 
 À ce stade, je privilégiais la vitesse d'exploration : valider rapidement que l'approche fonctionnait avant de peaufiner les détails. Cette stratégie pragmatique s'est avérée suffisante pour passer à l'étape suivante, où une évaluation plus rigoureuse deviendrait nécessaire.
-#### Conclusion
+##### Conclusion
 Cette approche a donné des résultats mitigés. Le travail sur **le module 1** a effectivement permis de réduire significativement les temps de calcul en éliminant les recalculs redondants. En revanche, les gains obtenus sur **le module 2** (parallélisation du filtrage) se trouvent largement amoindris par le goulot d'étranglement rencontré au **module 3** : l'impossibilité de paralléliser les descentes de gradient force un traitement séquentiel qui limite l'impact des optimisations précédentes.
 
 Quoi qu'il en soit, à ce stade l'évaluation d'un jeu de paramètre nécessite encore 2 à 3 minutes de calcul sur l'ensemble des frames et  n'est pas suffisante pour tester rapidement un grand nombre de combinaisons de paramètres. Pour explorer efficacement l'espace des paramètres sans attendre des jours, il fallait être plus créatif et trouver une approche alternative au problème.
-### Stratégie d'échantillonnage intelligent
+#### Stratégie d'échantillonnage intelligent
 Pour accélérer l'exploration de l'espace des paramètres, j'ai opté pour une approche d'échantillonnage stratégique. La clé était de construire un sous-ensemble échantillonné aussi représentatif que possible de l'ensemble original pour un nombre de frames minimal. Pour cela, j'ai procédé en trois étapes :
 1. **Caractérisation des erreurs** : J'ai d'abord calculé les erreurs de prédiction sur l'ensemble des frames en utilisant des paramètres de filtrage simple
 2. **Stratification par performance** : J'ai ensuite obtenu la distribution de ces erreurs pour chaque vidéo et organisé les frames en déciles selon leur niveau d'erreur
@@ -381,8 +383,8 @@ Cette stratégie garantit que l'échantillon contient à la fois des frames "fac
 
 **Résultat**
 L'évaluation des paramètres de filtrage sur ces 100 frames soigneusement sélectionnées ne prend plus que 2-3 secondes, permettant enfin une exploration efficace de l'espace des paramètres.
-## Recherche des paramètres et résultats
-### Stratégie de recherche des paramètres
+### Recherche des paramètres et résultats
+#### Stratégie de recherche des paramètres
 Une fois que j'avais une méthode d'évaluation suffisamment rapide, il fallait choisir une stratégie pour explorer l'espace des paramètres de filtrage. Plusieurs approches s'offraient à moi :
 
 1. **Exploration manuelle** : Recherche intuitive basée sur l'observation des résultats
@@ -410,10 +412,10 @@ Ces paramètres ont produit un **score de 54.32%**, représentant une améliorat
   <figcaption>Exemple de prédiction avec la méthode de l'arc 4</figcaption>
 </figure>
 
-# 5ème arc : amélioration du filtrage et post-processing
-## Partie 1 : améliorations du pipeline
-### Filtre
-#### Sigmoïde
+## 5ème arc : amélioration du filtrage et post-processing
+### Partie 1 : améliorations du pipeline
+#### Filtre
+##### Sigmoïde
 Dans l'arc précédent, j'avais opté pour un filtrage binaire "dur" sur les vecteurs de flux optique : les vecteurs dont la norme était inférieure à 13 étaient simplement éliminés du calcul. Bien que cette approche ait démontré son efficacité en produisant des résultats satisfaisants, elle limitait la flexibilité des méthodes de filtrage que je pouvais tester.
 
 Cette rigidité m'a conduit à explorer une approche plus nuancée combinant filtrage et pondération. L'objectif était de trouver une fonction mathématique suffisamment générale pour exprimer un large éventail de stratégies de filtrage, tout en conservant un nombre de paramètres gérable pour l'optimisation.
@@ -454,7 +456,7 @@ $$v'_i = v_i \cdot sig(\|v_i\|, θ_{norm}, α_{norm}) \cdot sig(c_i, θ_{col}, �
 Cette approche unifie filtrage dur et pondération douce dans un cadre mathématique 
 cohérent avec seulement 4 paramètres à optimiser.
 
-#### Amélioration du critère sur la colinéarité
+##### Amélioration du critère sur la colinéarité
 
 Pour rappel, dans l'arc précédent, je calculais pour chaque vecteur du flux optique un score de colinéarité avec pour point de référence le centre de l'image afin de m'assurer que les vecteurs retenus pointent grossièrement dans la direction opposée au centre de l'image.
 
@@ -472,7 +474,7 @@ Plutôt que d'utiliser systématiquement le centre de l'image comme point de ré
 
 Cette approche permet en principe d'améliorer le filtrage des vecteurs, puisque le point de référence est plus proche des véritables prédictions à effectuer.
 
-#### Heatmap de colinéarité
+##### Heatmap de colinéarité
 
 À ce stade du projet, une question m'a intrigué : **tous les pixels de l'image contribuent-ils équitablement à la qualité de l'estimation ?** Mon intuition était que certaines zones pourraient systématiquement fournir des vecteurs plus informatifs - peut-être en raison de la géométrie de la scène ou des patterns de mouvement récurrents.
 
@@ -480,7 +482,7 @@ Pour explorer cette hypothèse, j'ai décidé de créer une "carte de chaleur" (
 
 Mais une question méthodologique se posait : **par rapport à quel point de référence calculer ces scores de colinéarité ?** Cette question m'a naturellement conduit à explorer deux approches complémentaires.
 
-##### Deux stratégies d'analyse spatiale
+###### Deux stratégies d'analyse spatiale
 **Approche 1 : Heatmap absolue (coordonnées fixes)**
 Dans cette première approche, je calcule la collinéarité moyenne des vecteurs de chaque pixel par rapport au **centre fixe de l'image** (largeur/2, hauteur/2). 
 
@@ -500,7 +502,7 @@ Pour chaque position relative à l'épipole :
 
 Cette approche visait à découvrir des patterns géométriques récurrents autour de l'épipole - par exemple, "les vecteurs situés 100 pixels en bas à droite de l'épipole sont-ils systématiquement plus informatifs ?" - indépendamment de la position absolue de l'épipole dans chaque vidéo.
 
-##### Résultats obtenus
+###### Résultats obtenus
 **Heatmaps absolues par vidéo (Approche 1) :**
 Sur l'image suivante on peut voir la moyenne des scores de collinéarité par vidéo en coordonnées absolues :
 <figure>
@@ -529,12 +531,12 @@ J'ai également implémenté et testé cette approche pour voir si elle révéle
 </figure>
 
 On observe que les patterns sont beaucoup moins nets que dans l'approche absolue. Par conséquent, j'ai décidé de conserver l'approche de la heatmap absolue globale pour la suite.
-##### Utilisation de la heatmap absolue pour le filtrage
+###### Utilisation de la heatmap absolue pour le filtrage
 J'ai implémenté l'utilisation de cette heatmap absolue comme masque de coefficients lors du filtrage des vecteurs. L'idée est de donner plus d'importance aux vecteurs situés dans les régions qui ont historiquement de bons scores de collinéarité, et moins d'importance à ceux dans les régions moins informatives. 
 
 Concrètement, j'ai introduit un **paramètre de pondération** compris entre 0 et 1 qui contrôle l'influence de la heatmap : 0 ignore complètement la heatmap, 1 lui donne une influence maximale. Cela permet de tester différents degrés d'exploitation de l'information spatiale dans le filtrage.
 
-### Optimiseur
+#### Optimiseur
 En analysant les estimations obtenues à l'issue du quatrième arc, j'ai observé quelque chose : sur les frames où l'écart entre le point prédit et le point labellisé était le plus important, l'erreur provenait notemment de l'optimiseur qui ne parvenait pas à atteindre le minimum de la fonction de colinéarité. Mon critère d'arrêt basé sur l'amélioration de la fonction de coût (arrêt lorsque l'amélioration devient inférieure à 1e-4 pendant 3 itérations consécutives) était tout simplement trop restrictif.
 
 Plutôt que de chercher à trouver la bonne valeur de seuil pour le critère d'arrêt, j'ai décidé de changer le critère d'arrêt : arrêter l'optimisation lorsque la prédiction n'a pas bougé de plus de 1 pixel au cours des 5 dernières itérations.
@@ -545,10 +547,10 @@ Cette approche présente plusieurs avantages :
 - Dans tous les cas observés, la prédiction est très proche du minimum global.
 
 
-## Partie 2 : Post-processing
+### Partie 2 : Post-processing
 Depuis le 3ème arc de ce projet, j'observe que mes prédictions d'épipole, bien qu'améliorées à chaque itération, restent très bruitées et bénéficieraient probablement d'un lissage en post-processing. J'ai décidé de garder cette optimisation pour la fin du projet comme "cerise sur le gâteau" pour un petit bonus de performance.
 
-#### Identification des frames valides
+##### Identification des frames valides
 
 Un problème fondamental se pose lors de l'estimation de l'épipole : **sur certaines frames, le véhicule est à l'arrêt ou se déplace trop lentement** pour permettre une estimation fiable. Dans ces situations, les vecteurs de flux optique ont des normes très faibles et sont particulièrement bruités. Avec mes critères de filtrage actuels (seuil de norme ≥ 13), la quasi-totalité de ces vecteurs se trouvent éliminés, ne laissant pas suffisamment d'information pour l'optimisation.
 
@@ -559,7 +561,7 @@ Pour le calcul des moyennes de lissage, je définis l'ensemble des **frames vali
 
 Pour clarifier les calculs de lissage, je note $p_1, p_2, \dots, p_{\|V\|}$ la séquence des prédictions des frames valides **ordonnées temporellement**. Ainsi, $p_i$ correspond à la $i$-ème prédiction valide dans l'ordre chronologique, et $p_{i-1}$ désigne la prédiction valide qui la précède immédiatement. Ces prédictions ordonnées sont les seules utilisées dans les calculs de lissage, évitant ainsi de biaiser artificiellement les résultats vers le centre de l'écran.
 
-#### Méthodes de lissage implémentées
+##### Méthodes de lissage implémentées
 
 J'ai exploré trois approches de lissage, de la plus simple à la plus sophistiquée :
 
@@ -597,9 +599,9 @@ Cette méthode tire parti de l'information temporelle complète de la séquence 
 
 - [ ] Donner l'effet sur les résultats de l'arc précédent.
 
-## Partie 3 Recherche de paramètres optimaux
+### Partie 3 Recherche de paramètres optimaux
 
-### L'espace des paramètres
+#### L'espace des paramètres
 
 À ce stade du projet, mon pipeline de filtrage a considérablement évolué depuis la méthode à deux paramètres de l'arc précédent. Le système combine maintenant trois filtres successifs :
 
@@ -612,7 +614,7 @@ Cette méthode tire parti de l'information temporelle complète de la séquence 
 **Espace de paramètres résultant :**
 L'espace de paramètres compte désormais **6 dimensions totales**, composées de 5 paramètres continus et 1 paramètre binaire. Cette complexité accrue nécessite des méthodes d'optimisation plus sophistiquées que la méthode de recherche utilisée dans l'arc précédent.
 
-### Choix de la méthode de recherche des paramètres optimaux
+#### Choix de la méthode de recherche des paramètres optimaux
 
 Face à cet espace de paramètres de taille intermédiaire, j'ai retenu la recherche Bayésienne pour la recherche de valeurs optimales pour plusieurs raisons.
 
@@ -622,14 +624,14 @@ Face à cet espace de paramètres de taille intermédiaire, j'ai retenu la reche
 
 **Contrôle de l'exploration** : La possibilité d'ajuster l'équilibre exploration/exploitation via les fonctions d'acquisition permettait d'adapter la stratégie selon l'avancement : exploration large au début, puis exploitation de l'information accumulée sur la fin de la recherche.
 
-### Processus de recherche
-#### Phase 1 : Exploration bayésienne
+#### Processus de recherche
+##### Phase 1 : Exploration bayésienne
 Je commence par une recherche bayésienne en fixant un paramètre : le point de référence utilisé pour calculer les scores de colinéarité servant pour le filtrage reste le centre de l'image. On explore donc dans l'espace des cinq paramètres restants.
 
 Après environ 1000 évaluations avec une stratégie d'exploration puis d'exploitation, j'identifie une région prometteuse dans l'espace des paramètres.
 
 À ce stade, une observation importante émerge : la heatmap de colinérarité n'apporte pas d'amélioration significative (on gardera ce paramètre fixé à 0)
-#### Phase 2 : Raffinement local
+##### Phase 2 : Raffinement local
 Pour explorer plus exhaustivement la région identifiée, je bascule vers des recherches par grille (grid search) locales. Je me concentre sur les 4 paramètres restants : les deux coefficients sigmoïdaux (pente et seuil) pour les filtres de norme et de colinéarité. J'optimise alternativement chaque filtre pour affiner progressivement les paramètres.
 
 Les paramètres optimaux identifiés sont :
@@ -649,11 +651,11 @@ On observe qu'on est resté sur un filtre "dur" pour le filtre de norme. En reva
 
 Cette configuration atteint une performance de **39.47%**.
 
-**Phase 3 : Optimisation du point de référence**
+##### Phase 3 : Optimisation du point de référence
 Une fois que mon jeu de paramètres optimal est trouvé pour le point de référence fixé au centre de l'image, je m'autorise à utiliser les points moyens des prédictions de l'expérience précédente comme nouveaux points de référence pour le calcul des scores de colinéarité.
 En utilisant ces points moyens de référence, la performance s'améliore significativement à **29.77%**.
 
-#### Phase 4 : Post-processing et lissage
+##### Phase 4 : Post-processing et lissage
 J'applique ensuite différentes méthodes de lissage sur les prédictions, avec optimisation des hyperparamètres.
 Dans le tableau ci-dessous, on peut observer les performances obtenues pour les deux expériences précédentes : celle qui utilise le point de référence au centre de l'image et celle qui utilise les points moyens des prédictions de l'expérience précédente.
 
@@ -689,7 +691,7 @@ On observe que lisser les prédictions avec la moyenne exponentielle bi-directio
 Sur la figure ci-dessus, visuellement, je tends à préférer la méthode utilisant le point de référence au centre de l'image car elle semble plus réactive aux changements de direction du véhicule bien que l'erreur par rapport au label soit plus élevée.
 Je soupçonne par conséquent que les labels ne sont pas parfaitement fiables car trop centrés autour de leur valeur moyenne.
 
-#### Observation annexe : Pourquoi contraindre le point de référence au centre
+##### Observation annexe : Pourquoi contraindre le point de référence au centre
 
 Une question légitime se pose : pourquoi ne pas laisser la recherche bayésienne optimiser simultanément tous les paramètres, y compris le choix du point de référence pour les scores de colinéarité ?
 
@@ -707,8 +709,8 @@ Cette stratégie produisait des estimations systématiquement proches des points
 
 
 
-## Explorations annexes
-### Impact du filtrage dur sur le nombre de vecteurs
+### Explorations annexes
+#### Impact du filtrage dur sur le nombre de vecteurs
 
 Lors de mes tests avec le filtrage binaire de l'arc précédent (seuils fixes de norme ≥ 13 et colinéarité ≥ 0.96), j'ai voulu vérifier une hypothèse : le nombre de vecteurs restants après filtrage pourrait-il être corrélé avec la qualité de la prédiction ?
 
@@ -723,9 +725,9 @@ Pour explorer cette question, j'ai visualisé deux métriques à travers toutes 
 
 Cependant, aucune règle claire n'a émergé de cette analyse. Les corrélations attendues ne se sont pas matérialisées de manière exploitable pour améliorer le filtrage.
 
-# Arc final : Optimisation avancée et conclusions
+## Arc final : Optimisation avancée et conclusions
 
-## Envoi des résultats
+### Envoi des résultats
 J'ai d'abord visualisé les prédictions en sortie de mon filtrage et lissage sur les cinq vidéos de test. Satisfait du résultat, je les ai envoyé à Comma.ai, confiant dans le fait que ma solution devrait avoir des performances sous la barre des 15%, mon objectif initial.
 Je notais cependant qu'il y a plusieurs virages serrés dans ce jeu de données, alors qu'il n'y en avait qu'un dans les données d'entraînement. J'espérais que ça n'impacterait pas trop mes résultats. De visu, ça semblait bien fonctionner.
 De toute manière, il n'y avait qu'un moyen de le savoir : envoyer mes résultats.
@@ -739,9 +741,9 @@ La question flottait en fait dans mon esprit depuis quelques arcs : était-il pe
 <!-- Quoi qu'il en soit, une partie de moi sentait qu'on commençait à arriver aux limites des paramètres généraux. Mais je ne pouvais pas en rester là avec ma méthode actuelle. -->
 il me fallait constituer un jeu d'entrainement et un jeu d'évaluation qui me permettent d'améliorer mon score sur le jeu de test !
 
-## Conception des jeux de données
+### Conception des jeux de données
 
-### Sélection des segments de vidéos pour la construction des jeux de données
+#### Sélection des segments de vidéos pour la construction des jeux de données
 Après un rapide coup d'œil aux frames où mon erreur était la plus élevée, il était évident qu'il y avait une forte corrélation entre les virages et une erreur élevée.
 
 Pour analyser ce phénomène, j'ai développé une méthode basée sur la déviation par rapport au point médian :
@@ -780,7 +782,7 @@ Dans la figure ci-dessous, on peut observer la distance euclidienne entre la pr�
 
 Il est évident sur ces figures que les virages sont les frames où l'erreur est la plus élevée. J'ai donc décidé de constituer un jeu d'entrainement et un jeu d'évaluation qui contiennent des frames de virages.
 
-### Constitution des jeux de données
+#### Constitution des jeux de données
 
 Maintenant que j'avais identifié les passages problématiques, il fallait construire des jeux d'entraînement et de validation stratégiques.
 
@@ -797,17 +799,17 @@ Maintenant que j'avais identifié les passages problématiques, il fallait const
 
 Cette approche plus ciblée me permettait d'augmenter la taille des jeux de données par rapport aux 100 échantillons précédents, tout en me concentrant sur les cas d'usage critiques.
 
-## Expérimentations avec les nouveaux jeux de données
+### Expérimentations avec les nouveaux jeux de données
 
-### Recherche bayésienne des paramètres de filtrage
+#### Recherche bayésienne des paramètres de filtrage
 
 Avec mes nouveaux jeux d'entraînement et de validation, j'ai relancé une recherche bayésienne pour optimiser les paramètres de filtrage. J'ai inclus mes meilleurs paramètres des arcs précédents comme points de départ pour guider la recherche. J'ai également effectué une recherche locale autour de ces paramètres pour explorer finement l'espace proche. Résultat surprenant : malgré l'exploration de centaines de combinaisons, aucune direction de recherche n'a permis d'améliorer significativement les performances sur les jeux d'entraînement ou de validation !
 
-### Optimisation des paramètres de lissage
+#### Optimisation des paramètres de lissage
 
 J'ai également testé de nouveaux paramètres de lissage sur ces jeux de données. Résultat identique : le paramètre optimal était le même que dans ma sélection précédente. Aucune amélioration n'a été apportée par l'utilisation d'un jeu d'entraînement et de validation séparés.
 
-### Bilan et insights
+#### Bilan et insights
 
 **Conclusion majeure** : La division en jeux d'entraînement/validation n'a pas apporté d'amélioration significative.
 
@@ -818,17 +820,17 @@ J'ai également testé de nouveaux paramètres de lissage sur ces jeux de donné
 
 **Hypothèse finale** : Le véritable problème n'est pas l'overfitting des paramètres, mais une faiblesse fondamentale de ma méthode pour prédire la direction du véhicule dans les virages. Les virages du jeu de test sont probablement plus difficiles à prédire que ceux d'entraînement.
 
-# Bilan et Perspectives
+## Bilan et Perspectives
 
 L'analyse des résultats révèle que la méthode développée, malgré ses optimisations successives, présente une faiblesse systématique dans les virages. Cette faiblesse ne provient pas d'un problème de paramétrage ou de surapprentissage, mais d'une confusion conceptuelle fondamentale dans l'approche initiale.
 
-## Le Foyer d'Expansion, l'objectif caché de ma méthode
+### Le Foyer d'Expansion, l'objectif caché de ma méthode
 
 Ma démarche, basée sur la minimisation du score de colinéarité du flux optique, était en réalité conçue pour trouver un Foyer d'Expansion (FoE). Ce phénomène correspond au point unique sur l'image d'où l'intégralité du mouvement apparent de la scène semble diverger.
 
 Cependant, le Foyer d'Expansion n'apparaît que sous une condition très stricte : un mouvement de translation pure.
 
-## La "Contamination" du Flux Optique dans les virages
+### La "Contamination" du Flux Optique dans les virages
 
 C'est cette condition qui explique l'échec de l'algorithme dans les virages. Un virage est un mouvement composé, alliant une translation à une rotation. Cette composante de rotation vient "contaminer" le champ de vecteurs du flux optique :
 - La translation seule crée un flux radial qui s'éloigne du FoE.
@@ -836,11 +838,11 @@ C'est cette condition qui explique l'échec de l'algorithme dans les virages. Un
 
 La combinaison des deux brise le schéma de divergence simple. En conséquence, dans un virage, le Foyer d'Expansion en tant que point de convergence unique n'existe plus.
 
-## La Distinction avec l'Épipole
+### La Distinction avec l'Épipole
 
 Le concept géométrique qui reste valide en toutes circonstances est celui de l'Épipole. Il s'agit de la projection du centre d'une caméra sur le plan de l'autre. Contrairement au FoE, son existence est garantie que le mouvement contienne ou non une rotation.
 
-## Diagnostic Final
+### Diagnostic Final
 
 Mon erreur a donc été de développer une méthode qui estime le Foyer d'Expansion en pensant estimer l'Épipole.
 - En ligne droite, les deux concepts coïncident, ce qui explique les bonnes performances de la méthode.
@@ -848,7 +850,7 @@ Mon erreur a donc été de développer une méthode qui estime le Foyer d'Expans
 
 Cette limitation est donc fondamentale à l'approche choisie et ne peut être résolue par un simple affinage des paramètres.
 
-## Solution envisagée : Décomposition du mouvement caméra
+### Solution envisagée : Décomposition du mouvement caméra
 
 Une approche robuste consiste à séparer les composantes de translation et de rotation du mouvement de la caméra. Cette méthode repose sur les étapes suivantes :
 
@@ -860,7 +862,7 @@ Une approche robuste consiste à séparer les composantes de translation et de r
 
 Cette approche devrait être robuste aux virages, et la majorité des composants nécessaires sont déjà disponibles dans OpenCV.
 
-## Leçon apprise
+### Leçon apprise
 
 Ma plus grande erreur stratégique fut de garder le lissage pour la fin. Je le voyais comme une "victoire facile", une cerise sur le gâteau, et j'ai donc sous-estimé son impact. C'était une double erreur.
 

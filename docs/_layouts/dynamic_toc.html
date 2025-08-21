@@ -257,29 +257,24 @@
                     <div class="col-md-8 col-lg-9">
                         <div class="main-content">
                             <article>
+                                <div class="content" id="main-content">
+                                    {{ content }}
+                                </div>
                                 {% if page.date %}
-                                <div class="article-meta mb-4 p-3" style="background-color: #f8f9fa; border-radius: 0.5rem; border: 1px solid #dee2e6;">
-                                    <div class="d-flex flex-wrap gap-3">
-                                        <div>
-                                            <strong>{% if page.lang == 'fr' %}Publié le{% else %}Published on{% endif %}:</strong>
-                                            <time datetime="{{ page.date | date_to_xmlschema }}">
-                                                {{ page.date | date: "%B %d, %Y" }}
-                                            </time>
-                                        </div>
+                                <div id="date-info" style="display: none;">
+                                    <div class="article-meta-discrete" style="color: #6c757d; font-size: 0.85rem; text-align: center; margin-top: 0.5rem; margin-bottom: 2rem; font-style: italic;">
+                                        <time datetime="{{ page.date | date_to_xmlschema }}">
+                                            {% if page.lang == 'fr' %}{{ page.date | date: "%d %B %Y" }}{% else %}{{ page.date | date: "%B %d, %Y" }}{% endif %}
+                                        </time>
                                         {% if page.last_modified_at and page.last_modified_at != page.date %}
-                                        <div>
-                                            <strong>{% if page.lang == 'fr' %}Modifié le{% else %}Last modified{% endif %}:</strong>
-                                            <time datetime="{{ page.last_modified_at | date_to_xmlschema }}">
-                                                {{ page.last_modified_at | date: "%B %d, %Y" }}
-                                            </time>
-                                        </div>
+                                        <span style="margin: 0 0.5rem;">•</span>
+                                        <time datetime="{{ page.last_modified_at | date_to_xmlschema }}">
+                                            {% if page.lang == 'fr' %}modifié le {{ page.last_modified_at | date: "%d %B %Y" }}{% else %}updated {{ page.last_modified_at | date: "%B %d, %Y" }}{% endif %}
+                                        </time>
                                         {% endif %}
                                     </div>
                                 </div>
                                 {% endif %}
-                                <div class="content" id="main-content">
-                                    {{ content }}
-                                </div>
                             </article>
                         </div>
                     </div>
@@ -454,6 +449,15 @@
             // Détecter le scroll
             window.addEventListener('scroll', updateActiveLink);
             updateActiveLink(); // Initial
+            
+            // Insérer la date discrètement après le titre principal
+            const mainTitle = document.querySelector('#main-content h1');
+            const dateInfo = document.getElementById('date-info');
+            if (mainTitle && dateInfo) {
+                const dateElement = dateInfo.querySelector('.article-meta-discrete').cloneNode(true);
+                mainTitle.parentNode.insertBefore(dateElement, mainTitle.nextSibling);
+                dateInfo.remove(); // Supprimer l'élément temporaire
+            }
             
             console.log("TOC contextuel activé!");
         });
